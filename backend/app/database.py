@@ -1,13 +1,44 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-import os
-from dotenv import load_dotenv
+from pymongo import monitoring
+from .config import settings
+import logging
 
-# Загружаем переменные из .env
-load_dotenv()
+logger = logging.getLogger(__name__)
 
-MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
-DB_NAME = "jira_clone"
+class CommandLogger(monitoring.CommandListener):
+    def started(self, event):
+        logger.debug(f"Command {event.command_name} started on server {event.connection_id}")
 
-# Подключение к MongoDB
-client = AsyncIOMotorClient(MONGO_URL)
-database = client[DB_NAME]
+    def succeeded(self, event):
+        logger.debug(f"Command {event.command_name} succeeded in {event.duration_micros} microseconds")
+
+    def failed(self, event):
+        logger.error(f"Command {event.command_name} failed in {event.duration_micros} microseconds")
+
+class Database:
+    client: AsyncIOMotorClient = None
+
+    async def connect(self):
+        monitoring.register(CommandLogger())
+        self.client = AsyncIOMotorClient(
+            settings.MONGODB_URL,
+            maxPoolSize=settings.MAX_CONNECTIONS_COUNT,
+            minPoolSize=settings.MIN_CONNECTIONS_COUNT,
+        )
+        try:
+            await self.client.admin.command('ping')
+            logger.info("Successfully connected to MongoDB")
+        except Exception as e:
+            logger.error(f"Could not connect to MongoDB: {e}")
+            raise
+
+    async def close(self):
+        if self.client:
+            self.client.close()
+            logger.info("MongoDB connection closed")
+
+db = Database()
+
+
+def get_database():
+    return None
