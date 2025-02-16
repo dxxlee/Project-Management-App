@@ -3,6 +3,7 @@ from pymongo import monitoring
 from .config import settings
 import logging
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class CommandLogger(monitoring.CommandListener):
@@ -27,7 +28,7 @@ class Database:
         )
         try:
             await self.client.admin.command('ping')
-            logger.info("Successfully connected to MongoDB")
+            logger.info(" Successfully connected to MongoDB!")
         except Exception as e:
             logger.error(f"Could not connect to MongoDB: {e}")
             raise
@@ -39,6 +40,7 @@ class Database:
 
 db = Database()
 
-
 def get_database():
-    return None
+    if db.client is None:
+        raise RuntimeError("Database connection has not been initialized. Call db.connect() first.")
+    return db.client["NoSqlDatabase"] 

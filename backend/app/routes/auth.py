@@ -6,13 +6,15 @@ from ..utils.auth import create_access_token, get_current_user
 from ..utils.security import get_password_hash, verify_password
 from ..database import get_database
 from ..config import settings
+from datetime import datetime
+
 
 router = APIRouter()
 
 
 @router.post("/register", response_model=User)
 async def register_user(user_data: UserCreate):
-    db = await get_database()
+    db = get_database()
 
     # Проверяем, существует ли пользователь
     existing_user = await db.users.find_one({"email": user_data.email})
@@ -25,6 +27,9 @@ async def register_user(user_data: UserCreate):
     # Создаем нового пользователя
     user_dict = user_data.dict()
     user_dict["hashed_password"] = get_password_hash(user_dict.pop("password"))
+    
+    user_dict["created_at"] = datetime.utcnow()
+    user_dict["is_active"] = True
 
     result = await db.users.insert_one(user_dict)
     user_dict["id"] = str(result.inserted_id)
@@ -32,9 +37,10 @@ async def register_user(user_data: UserCreate):
     return User(**user_dict)
 
 
+
 @router.post("/login")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    db = await get_database()
+    db = get_database()
     user = await db.users.find_one({"email": form_data.username})
 
     if not user or not verify_password(form_data.password, user["hashed_password"]):

@@ -9,8 +9,8 @@ load_dotenv()
 
 class Settings(BaseModel):
     # Database settings
-    MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb+srv://rakhat:<db_password>@cluster0.26e15.mongodb.net/")
-    DATABASE_NAME: str = "jira_clone"
+    MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb+srv://danielcoollee06:uOuu5b8aRUwdHNA0@clusternosqlfinal.q17yv.mongodb.net/NoSqlDatabase?retryWrites=true&w=majority")
+    DATABASE_NAME: str = "NoSqlDatabase"
 
     # Connection pools
     MAX_CONNECTIONS_COUNT: int = 10
