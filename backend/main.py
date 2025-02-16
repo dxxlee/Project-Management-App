@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from starlette.middleware.cors import CORSMiddleware
 from app.middleware.audit import AuditMiddleware
 from app.middleware.security import SecurityHeadersMiddleware
 from app.database import db
@@ -8,6 +9,19 @@ from app.database import get_database
 
 
 app = FastAPI(title="Project Management API")
+
+# Настройка CORS
+origins = [
+    "http://localhost:3000",  # React-приложение
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Подключаем middleware
 app.add_middleware(SecurityHeadersMiddleware)
