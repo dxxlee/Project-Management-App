@@ -22,7 +22,7 @@ class Settings(BaseModel):
     AUDIT_ENABLED: bool = True
 
     # JWT settings
-    JWT_SECRET: str = os.getenv("JWT_SECRET", secrets.token_urlsafe(32))
+    JWT_SECRET: str = os.getenv("JWT_SECRET", "default-secret-key")
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7

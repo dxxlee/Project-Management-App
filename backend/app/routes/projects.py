@@ -1,83 +1,107 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List
 from bson import ObjectId
-from ..models.project import Project
+from datetime import datetime
+from ..models.project import Project, ProjectCreate
 from ..utils.auth import get_current_user
 from ..database import db
+from ..database import get_database
 
 router = APIRouter()
 
 
 @router.post("/", response_model=Project)
-async def create_project(project: Project, current_user=Depends(get_current_user)):
-    """Создание нового проекта"""
+async def create_project(project: ProjectCreate, current_user=Depends(get_current_user)):
     project_dict = project.model_dump()
-    project_dict["owner_id"] = str(current_user.id)
-    project_dict["members"] = [str(current_user.id)]
+    project_dict.update({
+        "owner_id": str(current_user.id),
+        "members": [str(current_user.id)],
+        "created_at": datetime.now(),
+        "updated_at": datetime.now()
+    })
 
-    result = await db.client.projects.insert_one(project_dict)
-    project_dict["id"] = str(result.inserted_id)
-    return Project(**project_dict)
+    db = get_database()
+    result = await db["projects"].insert_one(project_dict)
+
+    # Получаем созданный проект
+    created_project = await db["projects"].find_one({"_id": result.inserted_id})
+    if created_project:
+        created_project["id"] = str(created_project["_id"])
+        del created_project["_id"]
+        return Project(**created_project)
+
+    raise HTTPException(status_code=500, detail="Failed to create project")
 
 
 @router.get("/{project_id}", response_model=Project)
 async def get_project(project_id: str, current_user=Depends(get_current_user)):
     """Получение информации о проекте"""
-    # Проверяем доступ пользователя к проекту
-    project = await db.client.projects.find_one({"_id": ObjectId(project_id)})
+    db = get_database()
+    project = await db["projects"].find_one({"_id": ObjectId(project_id)})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-
     if str(current_user.id) not in project.get("members", []):
         raise HTTPException(status_code=403, detail="Access denied")
-
+    project["id"] = str(project["_id"])
+    del project["_id"]
     return Project(**project)
 
 
 @router.put("/{project_id}", response_model=Project)
 async def update_project(project_id: str, project_update: Project, current_user=Depends(get_current_user)):
     """Обновление проекта"""
-    # Проверяем доступ пользователя к проекту
-    project = await db.client.projects.find_one({"_id": ObjectId(project_id)})
+    db = get_database()
+    project = await db["projects"].find_one({"_id": ObjectId(project_id)})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-
     if str(current_user.id) != project.get("owner_id"):
         raise HTTPException(status_code=403, detail="Only project owner can update project")
-
     update_dict = project_update.model_dump(exclude_unset=True)
-    result = await db.client.projects.update_one(
+    result = await db["projects"].update_one(
         {"_id": ObjectId(project_id)},
         {"$set": update_dict}
     )
-
-    updated_project = await db.client.projects.find_one({"_id": ObjectId(project_id)})
+    updated_project = await db["projects"].find_one({"_id": ObjectId(project_id)})
+    updated_project["id"] = str(updated_project["_id"])
+    del updated_project["_id"]
     return Project(**updated_project)
 
 
 @router.delete("/{project_id}")
 async def delete_project(project_id: str, current_user=Depends(get_current_user)):
     """Удаление проекта"""
-    # Проверяем доступ пользователя к проекту
-    project = await db.client.projects.find_one({"_id": ObjectId(project_id)})
+    db = get_database()
+    project = await db["projects"].find_one({"_id": ObjectId(project_id)})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-
     if str(current_user.id) != project.get("owner_id"):
         raise HTTPException(status_code=403, detail="Only project owner can delete project")
-
-    result = await db.client.projects.delete_one({"_id": ObjectId(project_id)})
-    return {"status": "success", "message": "Project deleted successfully"}
+    result = await db["projects"].delete_one({"_id": ObjectId(project_id)})
+    if result.deleted_count == 1:
+        return {"status": "success", "message": "Project deleted successfully"}
+    raise HTTPException(status_code=500, detail="Failed to delete project")
 
 
 @router.get("/", response_model=List[Project])
 async def get_user_projects(current_user=Depends(get_current_user)):
     """Получение всех проектов пользователя"""
-    projects = await db.client.projects.find({
-        "members": str(current_user.id)
-    }).to_list(None)
+    try:
+        db = get_database()
+        projects_cursor = db["projects"].find({"members": str(current_user.id)})
+        projects = await projects_cursor.to_list(length=None)  # Преобразуем курсор в список
+        print("Raw Projects Data:", projects)  # Логируем сырые данные из базы данных
 
-    return [Project(**project) for project in projects]
+        # Преобразуем ObjectId в строку и добавляем поле id
+        transformed_projects = []
+        for project in projects:
+            project["id"] = str(project["_id"])
+            del project["_id"]  # Удаляем поле _id
+            transformed_projects.append(Project(**project))
+
+        return transformed_projects
+    except Exception as e:
+        print("Error fetching projects:", str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{project_id}/members/{user_id}")
