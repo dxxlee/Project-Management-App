@@ -69,15 +69,28 @@ const Teams = () => {
   };
 
   // Добавление участника в команду
-  const handleAddMemberByEmail = async (teamId, email) => {
+  const handleAddMemberByEmail = async (teamId, email, role) => {
     try {
-      await api.post(`/api/teams/${teamId}/members`, { email });
+      await api.post(`/api/teams/${teamId}/members`, { email, role });
       toast.success('Member added successfully!');
       fetchTeams(); // Обновляем список команд
     } catch (error) {
       toast.error('Failed to add member');
       console.error('Error adding member:', error);
     }
+  };
+
+  // Изменение роли участника
+  const handleUpdateMemberRole = async (teamId, userId, role) => {
+      try {
+          // Ensure you're sending an object with a 'role' property
+          await api.put(`/api/teams/${teamId}/members/${userId}`, { role });
+          toast.success('Member role updated successfully!');
+          fetchTeams(); // Обновляем список команд
+      } catch (error) {
+          toast.error('Failed to update member role');
+          console.error('Error updating member role:', error);
+      }
   };
 
   // Удаление участника из команды
@@ -141,7 +154,8 @@ const Teams = () => {
               onSubmit={(e) => {
                 e.preventDefault();
                 const email = e.target.email.value;
-                handleAddMemberByEmail(team.id, email);
+                const role = e.target.role.value;
+                handleAddMemberByEmail(team.id, email, role);
                 e.target.reset(); // Очищаем форму
               }}
               className="mb-4"
@@ -155,6 +169,14 @@ const Teams = () => {
                   className="w-full p-2 border rounded"
                   required
                 />
+                <select
+                  name="role"
+                  className="w-full p-2 border rounded"
+                  defaultValue="member"
+                >
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                </select>
                 <button
                   type="submit"
                   className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600"
@@ -166,10 +188,23 @@ const Teams = () => {
 
             <div>
               <h4 className="text-sm font-semibold mb-2">Members:</h4>
+               {/* Список участников */}
               <ul className="list-disc list-inside text-gray-700">
                 {team.members.map((member) => (
                   <li key={member.user_id}>
-                    {member.user_name} ({member.role}) {/* Display member.user_name */}
+                    {member.user_name ? member.user_name : member.user_id}
+                    {/* Display member.user_name */}
+                    <select
+                      value={member.role}
+                      onChange={(e) => {
+                        handleUpdateMemberRole(team.id, member.user_id, e.target.value);
+                      }}
+                      className="ml-2 p-1 border rounded"
+                    >
+                      <option value="member">Member</option>
+                      <option value="admin">Admin</option>
+                    </select>
+
                     <button
                       onClick={() => handleRemoveMember(team.id, member.user_id)}
                       className="ml-2 bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"

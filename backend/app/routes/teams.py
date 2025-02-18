@@ -2,13 +2,17 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 from datetime import datetime
 from ..models.project import ProjectCreate, Project
-from ..models.team import Team, TeamRole, TeamUpdate, AddMemberByEmail
+from ..models.team import Team, TeamRole, TeamUpdate, AddMemberByEmail, UpdateMemberRole
 from ..utils.auth import get_current_user
 from ..database import db, get_database
 from bson import ObjectId
 
 router = APIRouter()
 
+
+def is_owner(team: dict, user_id: str) -> bool:
+    """Helper function to check if a user is the owner of the team."""
+    return team["members"][0]["user_id"] == user_id
 
 @router.post("/", response_model=Team)
 async def create_team(team: Team, current_user=Depends(get_current_user)):
@@ -59,7 +63,7 @@ async def delete_team(team_id: str, current_user=Depends(get_current_user)):
         return {"status": "success", "message": "Team deleted successfully"}
     raise HTTPException(status_code=500, detail="Failed to delete team")
 
-@router.post("/{team_id}/members")
+@router.post("/{team_id}/members", response_model=Team)
 async def add_team_member_by_email(
     team_id: str,
     data: AddMemberByEmail,  # Используем модель для валидации
@@ -68,6 +72,7 @@ async def add_team_member_by_email(
     """Добавление участника в команду по электронной почте"""
     db = get_database()
     email = data.email  # Получаем email из валидированных данных
+    role = data.role  # Получаем роль из валидированных данных
 
     # Проверяем существование команды
     team = await db["teams"].find_one({"_id": ObjectId(team_id)})
@@ -75,7 +80,8 @@ async def add_team_member_by_email(
         raise HTTPException(status_code=404, detail="Team not found")
 
     # Проверяем права текущего пользователя
-    if str(current_user.id) != team["members"][0]["user_id"]:
+    team_owner_id = team["members"][0]["user_id"]  # ID владельца команды
+    if str(current_user.id) != team_owner_id:
         raise HTTPException(
             status_code=403,
             detail="You don't have permission to modify this team"
@@ -92,14 +98,72 @@ async def add_team_member_by_email(
     if any(member["user_id"] == user_id for member in team["members"]):
         raise HTTPException(status_code=400, detail="User is already a member of this team")
 
-    # Добавляем пользователя в команду
+    # Добавляем пользователя в команду с указанной ролью
     result = await db["teams"].update_one(
         {"_id": ObjectId(team_id)},
-        {"$addToSet": {"members": {"user_id": user_id, "role": TeamRole.MEMBER}}}
+        {"$addToSet": {"members": {"user_id": user_id, "role": role}}}
     )
 
-    return {"status": "success", "message": "Member added successfully"}
+    # Обновляем информацию о команде
+    updated_team = await db["teams"].find_one({"_id": ObjectId(team_id)})
+    updated_team["id"] = str(updated_team["_id"])
+    del updated_team["_id"]
 
+    return Team(**updated_team)
+
+@router.put("/{team_id}/members/{user_id}", response_model=Team)
+async def update_member_role(
+    team_id: str,
+    user_id: str,
+    role_update: UpdateMemberRole,  # Use the new UpdateMemberRole model
+    current_user=Depends(get_current_user)
+):
+    """Update the role of a team member"""
+    db = get_database()
+
+    # Check if team exists
+    team = await db["teams"].find_one({"_id": ObjectId(team_id)})
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    # Check if current user is the team owner
+    if not is_owner(team, str(current_user.id)):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the team owner can modify member roles."
+        )
+
+    # Prevent demoting the owner or assigning owner role to others
+    # Prevent demoting the owner
+    if is_owner(team, user_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot change the role of the team owner."
+        )
+
+    # Prevent promoting a user to owner
+    # Prevent assigning owner role to others
+    if role_update.role == TeamRole.OWNER:
+         raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot assign 'owner' role to other members."
+        )
+
+    # Update member's role in database
+    result = await db["teams"].update_one(
+        {"_id": ObjectId(team_id), "members.user_id": user_id},
+        {"$set": {"members.$.role": role_update.role}}  # Use `role_update.role` to get the enum value
+    )
+
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Member not found in team")
+
+    # Fetch and return updated team information
+    updated_team = await db["teams"].find_one({"_id": ObjectId(team_id)})
+    updated_team["id"] = str(updated_team["_id"])
+    del updated_team["_id"]
+
+    return Team(**updated_team)
 
 @router.delete("/{team_id}/members/{user_id}")
 async def remove_team_member(
@@ -150,7 +214,6 @@ async def get_team(team_id: str, current_user=Depends(get_current_user)):
 
     return Team(**team)
 
-
 @router.get("/", response_model=List[Team])
 async def get_user_teams(current_user=Depends(get_current_user)):
     """Получение списка команд пользователя"""
@@ -179,7 +242,7 @@ async def get_user_teams(current_user=Depends(get_current_user)):
         transformed_teams.append(Team(**team))
     return transformed_teams
 
-# Новый эндпоинт для создания проекта в рамках команды
+
 @router.post("/{team_id}/projects", response_model=Project)
 async def create_team_project(team_id: str, project: ProjectCreate, current_user = Depends(get_current_user)):
     db = get_database()
@@ -217,8 +280,6 @@ async def create_team_project(team_id: str, project: ProjectCreate, current_user
     raise HTTPException(status_code=500, detail="Failed to create project")
 
 
-
-# Новый эндпоинт для получения списка проектов, связанных с командой
 @router.get("/{team_id}/projects", response_model=List[Project])
 async def get_team_projects(team_id: str, current_user=Depends(get_current_user)):
     db = get_database()
