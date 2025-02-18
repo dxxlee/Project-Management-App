@@ -1,16 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
-from typing import List
+from fastapi import APIRouter, Depends, HTTPException, Query, FastAPI
+from typing import List, Optional
 from datetime import datetime
 from bson import ObjectId
-from ..models.task import Task, TaskStatus, TaskPriority  # Импортируем модели
+from ..models.task import Task, TaskStatus, TaskPriority  # Импорт моделей
 from ..utils.auth import get_current_user
-from ..database import db
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
-from ..database import get_database
-from fastapi import FastAPI
+from ..database import db, get_database
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address  # Импорт функции get_remote_address
+
+app = FastAPI()
 
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
@@ -46,7 +45,7 @@ async def create_task(
                     detail=f"User {assignee} is not a member of the project"
                 )
     
-    # Создаем задачи для каждого assignee или одну задачу если assignees не указаны
+    # Создаем задачи для каждого assignee или одну задачу, если assignees не указаны
     tasks = []
     if assignees:
         for assignee in assignees:
@@ -85,9 +84,9 @@ async def get_task(task_id: str, current_user=Depends(get_current_user)):
 
 @router.put("/tasks/{task_id}", response_model=Task)
 async def update_task(
-        task_id: str,
-        task_update: Task,
-        current_user=Depends(get_current_user)
+    task_id: str,
+    task_update: Task,
+    current_user=Depends(get_current_user)
 ):
     """Обновление задачи"""
     # Проверяем существование задачи
@@ -118,8 +117,8 @@ async def delete_task(task_id: str, current_user=Depends(get_current_user)):
 
 @router.get("/project/{project_id}/tasks", response_model=List[Task])
 async def get_project_tasks(
-        project_id: str,
-        current_user=Depends(get_current_user)
+    project_id: str,
+    current_user=Depends(get_current_user)
 ):
     """Получение всех задач проекта"""
     tasks = await db.client.tasks.find(
@@ -160,6 +159,7 @@ async def update_task_status(
         raise HTTPException(status_code=404, detail="Task not found")
     return {"status": "success", "message": "Task status updated"}
 
+
 @router.get("/user/tasks", response_model=List[Task])
 async def get_user_tasks(current_user=Depends(get_current_user)):
     """Получение всех задач пользователя из всех проектов"""
@@ -186,6 +186,7 @@ async def get_user_tasks(current_user=Depends(get_current_user)):
     
     return [Task(**task) for task in tasks]
 
+
 @router.post("/{project_id}/tasks/bulk", response_model=List[Task])
 async def create_tasks_for_members(
     project_id: str,
@@ -205,17 +206,17 @@ async def create_tasks_for_members(
     # Проверяем роль пользователя
     team = None
     await check_project_permissions(project_id, user_id, required_roles=["owner", "admin"])
-        if team:
-            user_role = next(
-                (member["role"] for member in team["members"] 
-                 if member["user_id"] == str(current_user.id)),
-                None
+    if team:
+        user_role = next(
+            (member["role"] for member in team["members"] 
+             if member["user_id"] == str(current_user.id)),
+            None
+        )
+        if user_role not in ["owner", "admin"]:
+            raise HTTPException(
+                status_code=403,
+                detail="Only owner and admin can create tasks"
             )
-            if user_role not in ["owner", "admin"]:
-                raise HTTPException(
-                    status_code=403,
-                    detail="Only owner and admin can create tasks"
-                )
     
     # Определяем список участников для назначения задачи
     assignees = []
@@ -247,7 +248,8 @@ async def create_tasks_for_members(
     
     return created_tasks
 
-    @router.get("/project/{project_id}/tasks", response_model=List[Task])
+
+@router.get("/project/{project_id}/tasks", response_model=List[Task])
 async def get_project_tasks(
     project_id: str,
     skip: int = Query(0),
@@ -258,6 +260,7 @@ async def get_project_tasks(
         {"project_id": project_id}
     ).skip(skip).limit(limit).to_list(None)
     return [Task(**task) for task in tasks]
+
 
 @router.put("/tasks/{task_id}", response_model=Task)
 async def update_task(
@@ -281,13 +284,13 @@ async def update_task(
     # Проверяем права пользователя
     is_admin = False
     await check_project_permissions(project_id, user_id, required_roles=["owner", "admin"])
-        if team:
-            user_role = next(
-                (member["role"] for member in team["members"] 
-                 if member["user_id"] == str(current_user.id)),
-                None
-            )
-            is_admin = user_role in ["owner", "admin"]
+    if team:
+        user_role = next(
+            (member["role"] for member in team["members"] 
+             if member["user_id"] == str(current_user.id)),
+            None
+        )
+        is_admin = user_role in ["owner", "admin"]
     else:
         is_admin = project.get("owner_id") == str(current_user.id)
     
@@ -325,9 +328,9 @@ async def update_task(
 
 @router.put("/tasks/{task_id}/assign")
 async def assign_task(
-        task_id: str,
-        assignee_id: str,
-        current_user=Depends(get_current_user)
+    task_id: str,
+    assignee_id: str,
+    current_user=Depends(get_current_user)
 ):
     """Назначение задачи пользователю"""
     # Проверяем существование пользователя
@@ -348,6 +351,7 @@ async def assign_task(
         raise HTTPException(status_code=404, detail="Task not found")
     return {"status": "success", "message": "Task assigned successfully"}
 
+
 async def check_project_permissions(project_id: str, user_id: str, required_roles=None):
     """Проверка прав пользователя в проекте и команде"""
     db = get_database()
@@ -357,19 +361,19 @@ async def check_project_permissions(project_id: str, user_id: str, required_role
     
     # Проверяем права в команде, если проект привязан к команде
     await check_project_permissions(project_id, user_id, required_roles=["owner", "admin"])
-        if team:
-            for member in team["members"]:
-                if member["user_id"] == user_id:
-                    if required_roles and member["role"] in required_roles:
-                        return True
-                    elif not required_roles:
-                        return True
+    if team:
+        for member in team["members"]:
+            if member["user_id"] == user_id:
+                if required_roles and member["role"] in required_roles:
+                    return True
+                elif not required_roles:
+                    return True
     
-    # Если проект не привязан к команде, проверяем является ли пользователь владельцем
+    # Если проект не привязан к команде, проверяем, является ли пользователь владельцем
     if project.get("owner_id") == user_id:
         return True
         
-    # Проверяем является ли пользователь участником проекта
+    # Проверяем, является ли пользователь участником проекта
     if user_id in project.get("members", []):
         return True
         
