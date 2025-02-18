@@ -14,7 +14,7 @@ class TeamRole(str, Enum):
 class TeamMember(BaseModel):
     user_id: str
     role: TeamRole = TeamRole.MEMBER
-
+    user_name: Optional[str] = None
 
 class Team(BaseModel):
     id: Optional[str] = Field(default_factory=lambda: str(ObjectId()))

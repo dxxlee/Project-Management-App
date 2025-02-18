@@ -10,9 +10,30 @@ from ..database import get_database
 router = APIRouter()
 
 
+async def get_team_name(team_id: str) -> str:
+    """Helper function to fetch team name by ID."""
+    db = get_database()
+    team = await db["teams"].find_one({"_id": ObjectId(team_id)})
+    if team:
+        return team["name"]
+    return "No Team"
+
 @router.post("/", response_model=Project)
 async def create_project(project: ProjectCreate, current_user=Depends(get_current_user)):
     project_dict = project.model_dump()
+
+    # Если указан team_id — проверяем привилегии в команде
+    if project_dict.get("team_id"):
+        db = get_database()
+        team = await db["teams"].find_one({"_id": ObjectId(project_dict["team_id"])})
+        if not team:
+            raise HTTPException(status_code=404, detail="Team not found")
+        # Проверяем, что текущий пользователь - владелец или админ команды
+        allowed_roles = ["owner", "admin"]
+        user_roles = [member["role"] for member in team["members"] if member["user_id"] == str(current_user.id)]
+        if not any(role in allowed_roles for role in user_roles):
+            raise HTTPException(status_code=403, detail="You don't have permission to create a project for this team")
+
     project_dict.update({
         "owner_id": str(current_user.id),
         "members": [str(current_user.id)],
@@ -22,8 +43,6 @@ async def create_project(project: ProjectCreate, current_user=Depends(get_curren
 
     db = get_database()
     result = await db["projects"].insert_one(project_dict)
-
-    # Получаем созданный проект
     created_project = await db["projects"].find_one({"_id": result.inserted_id})
     if created_project:
         created_project["id"] = str(created_project["_id"])
@@ -96,6 +115,14 @@ async def get_user_projects(current_user=Depends(get_current_user)):
         for project in projects:
             project["id"] = str(project["_id"])
             del project["_id"]  # Удаляем поле _id
+
+            # Add team name to the project
+            team_id = project.get("team_id")
+            if team_id:
+                project["team_name"] = await get_team_name(team_id)
+            else:
+                project["team_name"] = "No Team"  # Default value if no team
+
             transformed_projects.append(Project(**project))
 
         return transformed_projects

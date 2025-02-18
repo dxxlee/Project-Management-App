@@ -5,10 +5,12 @@ import 'react-toastify/dist/ReactToastify.css';
 
 const Projects = () => {
   const [projects, setProjects] = useState([]);
-  const [newProject, setNewProject] = useState({ name: '', description: '' });
+  const [teams, setTeams] = useState([]); // Массив команд
+  const [newProject, setNewProject] = useState({ name: '', description: '', team_id: '' });
   const [editingProject, setEditingProject] = useState(null);
   const [error, setError] = useState(null);
 
+  // Получение списка проектов
   const fetchProjects = async () => {
     try {
       const response = await api.get('/api/projects');
@@ -20,17 +22,44 @@ const Projects = () => {
     }
   };
 
+  // Получение списка команд
+  const fetchTeams = async () => {
+    try {
+      const response = await api.get('/api/teams');
+      console.log("Teams Data:", response.data); // Проверяем, что API возвращает
+      if (Array.isArray(response.data)) {
+        setTeams(response.data); // Устанавливаем teams только если это массив
+      } else {
+        console.error("Teams data is not an array:", response.data);
+        setError("Failed to load teams: Data is not an array");
+      }
+    } catch (error) {
+      console.error('Error fetching teams:', error);
+      setError(error.response?.data?.detail || 'Failed to fetch teams');
+    }
+  };
+
   useEffect(() => {
     fetchProjects();
+    fetchTeams();
   }, []);
 
+  // Создание нового проекта
   const handleCreateProject = async (e) => {
     e.preventDefault();
     try {
-      const response = await api.post('/api/projects', newProject);
+      let response;
+      if (newProject.team_id) {
+        // Создаем проект для выбранной команды
+        response = await api.post(`/api/teams/${newProject.team_id}/projects`, newProject);
+      } else {
+        // Стандартное создание проекта
+        response = await api.post('/api/projects', newProject);
+      }
       setProjects([...projects, response.data]);
-      setNewProject({ name: '', description: '' });
+      setNewProject({ name: '', description: '', team_id: '' });
       toast.success('Project created successfully!');
+      fetchProjects(); // Обновляем список проектов
     } catch (error) {
       toast.error('Failed to create project');
       console.error('Error creating project:', error);
@@ -80,7 +109,9 @@ const Projects = () => {
             type="text"
             placeholder="Project Name"
             value={newProject.name}
-            onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+            onChange={(e) =>
+              setNewProject({ ...newProject, name: e.target.value })
+            }
             className="w-full p-2 border rounded"
             required
           />
@@ -88,9 +119,26 @@ const Projects = () => {
             type="text"
             placeholder="Description"
             value={newProject.description}
-            onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
+            onChange={(e) =>
+              setNewProject({ ...newProject, description: e.target.value })
+            }
             className="w-full p-2 border rounded"
           />
+          {/* Выпадающий список для выбора команды (необязательно) */}
+          <select
+            value={newProject.team_id}
+            onChange={(e) =>
+              setNewProject({ ...newProject, team_id: e.target.value })
+            }
+            className="w-full p-2 border rounded"
+          >
+            <option value="">Select team (optional)</option>
+            {teams.map((team) => (
+              <option key={team.id} value={team.id}>
+                {team.name}
+              </option>
+            ))}
+          </select>
           <button
             type="submit"
             className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
@@ -154,6 +202,11 @@ const Projects = () => {
           <div key={project.id} className="border rounded p-4">
             <h3 className="text-lg font-semibold">{project.name}</h3>
             <p className="text-gray-600 mb-3">{project.description}</p>
+            {project.team_id && (
+              <p className="text-sm text-blue-600 mb-2">
+                Team: {project.team_name}
+              </p>
+            )}
             <div className="flex space-x-2">
               <button
                 onClick={() => setEditingProject(project)}

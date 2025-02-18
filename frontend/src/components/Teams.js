@@ -166,13 +166,13 @@ const Teams = () => {
 
             <div>
               <h4 className="text-sm font-semibold mb-2">Members:</h4>
-              <ul className="list-disc pl-5">
+              <ul className="list-disc list-inside text-gray-700">
                 {team.members.map((member) => (
                   <li key={member.user_id}>
-                    {member.user_id} ({member.role})
+                    {member.user_name} ({member.role}) {/* Display member.user_name */}
                     <button
                       onClick={() => handleRemoveMember(team.id, member.user_id)}
-                      className="ml-2 text-red-500 hover:text-red-700"
+                      className="ml-2 bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
                     >
                       Remove
                     </button>

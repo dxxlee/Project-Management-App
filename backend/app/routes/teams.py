@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
+from datetime import datetime
+from ..models.project import ProjectCreate, Project
 from ..models.team import Team, TeamRole, TeamUpdate, AddMemberByEmail
 from ..utils.auth import get_current_user
 from ..database import db, get_database
@@ -158,10 +160,82 @@ async def get_user_teams(current_user=Depends(get_current_user)):
     teams_cursor = db["teams"].find({"members": {"$elemMatch": {"user_id": str(current_user.id)}}})
     teams = await teams_cursor.to_list(None)
     print("Raw Teams Data:", teams)
+
     # Преобразуем ObjectId в строку и добавляем поле id
     transformed_teams = []
     for team in teams:
         team["id"] = str(team["_id"])
         del team["_id"]
+
+        # Enrich team members with user information
+        for member in team["members"]:
+            user_id = member["user_id"]
+            user = await db["users"].find_one({"_id": ObjectId(user_id)})
+            if user:
+                member["user_name"] = user["username"]  # Добавляем имя пользователя
+            else:
+                member["user_name"] = "Unknown User"
+
         transformed_teams.append(Team(**team))
     return transformed_teams
+
+# Новый эндпоинт для создания проекта в рамках команды
+@router.post("/{team_id}/projects", response_model=Project)
+async def create_team_project(team_id: str, project: ProjectCreate, current_user = Depends(get_current_user)):
+    db = get_database()
+    # Проверяем, что команда существует
+    team = await db["teams"].find_one({"_id": ObjectId(team_id)})
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    # Проверяем, что текущий пользователь имеет право создавать проекты в этой команде
+    allowed_roles = [TeamRole.OWNER, TeamRole.ADMIN]
+    user_roles = [member["role"] for member in team["members"] if member["user_id"] == str(current_user.id)]
+    if not any(role in allowed_roles for role in user_roles):
+        raise HTTPException(status_code=403, detail="You don't have permission to create a project for this team")
+
+    # Получаем список всех user_id из team["members"]
+    team_member_ids = [member["user_id"] for member in team["members"]]
+
+    # Формируем данные проекта, привязываем его к команде
+    project_dict = project.model_dump()
+    project_dict.update({
+        "owner_id": str(current_user.id),
+        "members": team_member_ids,  # Добавляем всех участников команды в проект
+        "created_at": datetime.now(),
+        "updated_at": datetime.now(),
+        "team_id": team_id  # Связь с командой
+    })
+
+    result = await db["projects"].insert_one(project_dict)
+    created_project = await db["projects"].find_one({"_id": result.inserted_id})
+    if created_project:
+        created_project["id"] = str(created_project["_id"])
+        del created_project["_id"]
+        return Project(**created_project)
+
+    raise HTTPException(status_code=500, detail="Failed to create project")
+
+
+
+# Новый эндпоинт для получения списка проектов, связанных с командой
+@router.get("/{team_id}/projects", response_model=List[Project])
+async def get_team_projects(team_id: str, current_user=Depends(get_current_user)):
+    db = get_database()
+    # Проверяем, что команда существует
+    team = await db["teams"].find_one({"_id": ObjectId(team_id)})
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    # Проверяем, что пользователь является участником команды (не обязательно Owner или Admin на этом этапе)
+    if not any(member["user_id"] == str(current_user.id) for member in team["members"]):
+        raise HTTPException(status_code=403, detail="You are not a member of this team")
+
+    projects_cursor = db["projects"].find({"team_id": team_id})
+    projects = await projects_cursor.to_list(length=None)
+    transformed_projects = []
+    for project in projects:
+        project["id"] = str(project["_id"])
+        del project["_id"]
+        transformed_projects.append(Project(**project))
+    return transformed_projects
