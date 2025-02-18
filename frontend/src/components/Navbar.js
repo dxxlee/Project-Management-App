@@ -1,23 +1,28 @@
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useContext } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext';
 
 const Navbar = () => {
-  const location = useLocation();
+  const { user, logout } = useContext(AuthContext);
+  const navigate = useNavigate();
 
-  // Не отображать Navbar на страницах /login и /register
-  if (location.pathname === '/login' || location.pathname === '/register') {
-    return null;
-  }
+  const handleLogout = () => {
+    logout(); // Вызываем функцию выхода из контекста
+    navigate('/login'); // Перенаправляем на страницу входа
+  };
 
   return (
-    <nav style={{ padding: '10px', background: '#f0f0f0', marginBottom: '20px' }}>
-      <ul style={{ listStyle: 'none', display: 'flex', gap: '10px' }}>
-        <li><Link to="/">Home</Link></li>
-        <li><Link to="/dashboard">Dashboard</Link></li>
-        <li><Link to="/projects">Projects</Link></li>
-        <li><Link to="/tasks">Tasks</Link></li>
-        <li><Link to="/teams">Teams</Link></li>
-      </ul>
+    <nav style={{ padding: '1rem', backgroundColor: '#f0f0f0' }}>
+      <Link to="/">Home</Link> |{' '}
+      <Link to="/dashboard">Dashboard</Link> |{' '}
+      <Link to="/projects">Projects</Link> |{' '}
+      <Link to="/tasks">Tasks</Link> |{' '}
+      <Link to="/teams">Teams</Link>
+      {user && (
+        <button style={{ marginLeft: '1rem' }} onClick={handleLogout}>
+          Logout
+        </button>
+      )}
     </nav>
   );
 };

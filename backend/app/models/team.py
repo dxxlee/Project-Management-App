@@ -28,3 +28,7 @@ class Team(BaseModel):
 class TeamUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+
+
+class AddMemberByEmail(BaseModel):
+    email: str
