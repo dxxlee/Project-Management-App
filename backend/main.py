@@ -5,6 +5,7 @@ from app.middleware.security import SecurityHeadersMiddleware
 from app.database import db
 from app.routes import auth, projects, tasks, teams
 from app.database import get_database
+from app.init_schema import init_schema_validation
 
 
 
@@ -30,6 +31,7 @@ app.add_middleware(AuditMiddleware)
 @app.on_event("startup")
 async def startup():
     await db.connect()
+    await init_schema_validation()
     
     # Получаем базу данных
     db_instance = db.client.get_database()
