@@ -1,29 +1,45 @@
-import React, { useContext } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { AuthContext } from '../context/AuthContext';
+import React from 'react';
+import { Link } from 'react-router-dom';
+import {
+  Navbar as BootstrapNavbar,
+  Nav,
+  Container,
+} from 'react-bootstrap';
 
 const Navbar = () => {
-  const { user, logout } = useContext(AuthContext);
-  const navigate = useNavigate();
-
-  const handleLogout = () => {
-    logout(); // Вызываем функцию выхода из контекста
-    navigate('/login'); // Перенаправляем на страницу входа
-  };
-
   return (
-    <nav style={{ padding: '1rem', backgroundColor: '#f0f0f0' }}>
-      <Link to="/">Home</Link> |{' '}
-      <Link to="/dashboard">Dashboard</Link> |{' '}
-      <Link to="/projects">Projects</Link> |{' '}
-      <Link to="/tasks">Tasks</Link> |{' '}
-      <Link to="/teams">Teams</Link>
-      {user && (
-        <button style={{ marginLeft: '1rem' }} onClick={handleLogout}>
-          Logout
-        </button>
-      )}
-    </nav>
+    <BootstrapNavbar bg="dark" variant="dark" expand="lg">
+      <Container>
+        {/* Логотип или название приложения */}
+        <BootstrapNavbar.Brand as={Link} to="/">
+          Project Manager
+        </BootstrapNavbar.Brand>
+
+        {/* Кнопка для мобильного меню */}
+        <BootstrapNavbar.Toggle aria-controls="basic-navbar-nav" />
+
+        {/* Основное содержимое навбара */}
+        <BootstrapNavbar.Collapse id="basic-navbar-nav">
+          <Nav className="me-auto">
+            <Nav.Link as={Link} to="/">
+              Home
+            </Nav.Link>
+            <Nav.Link as={Link} to="/dashboard">
+              Dashboard
+            </Nav.Link>
+            <Nav.Link as={Link} to="/projects">
+              Projects
+            </Nav.Link>
+            <Nav.Link as={Link} to="/tasks">
+              Tasks
+            </Nav.Link>
+            <Nav.Link as={Link} to="/teams">
+              Teams
+            </Nav.Link>
+          </Nav>
+        </BootstrapNavbar.Collapse>
+      </Container>
+    </BootstrapNavbar>
   );
 };
 

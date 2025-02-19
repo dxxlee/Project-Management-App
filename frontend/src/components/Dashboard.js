@@ -1,10 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api';
-
+import { Container, Card, Row, Col, Spinner, Alert, Button } from 'react-bootstrap';
+import { FaUser, FaEnvelope, FaSignOutAlt } from 'react-icons/fa';
+import { useNavigate } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext';
 const Dashboard = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { logout } = React.useContext(AuthContext);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -18,28 +23,73 @@ const Dashboard = () => {
         setLoading(false);
       }
     };
-
     fetchUserData();
   }, []);
 
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
   if (loading) {
-    return <p>Loading...</p>;
+    return (
+      <Container className="text-center mt-5">
+        <Spinner animation="border" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </Spinner>
+      </Container>
+    );
   }
 
   if (error) {
-    return <p>{error}</p>;
+    return (
+      <Container className="mt-5">
+        <Alert variant="danger">{error}</Alert>
+      </Container>
+    );
   }
 
   if (!user) {
-    return <p>Unable to load user data.</p>;
+    return (
+      <Container className="mt-5">
+        <Alert variant="warning">Unable to load user data.</Alert>
+      </Container>
+    );
   }
 
   return (
-    <div>
-      <h1>Dashboard</h1>
-      <p>Welcome, {user.username}!</p>
-      <p>Email: {user.email}</p>
-    </div>
+    <Container className="mt-5">
+      <Row className="justify-content-center">
+        <Col md={8}>
+          <Card className="shadow-sm">
+            <Card.Body>
+              <Card.Title className="text-center mb-4">
+                <FaUser size={32} className="mb-2" /> {/* Иконка пользователя */}
+                <br />
+                Welcome, {user.username}!
+              </Card.Title>
+
+              <Card.Text>
+                <div className="d-flex align-items-center justify-content-center mb-3">
+                  {/* Иконка email */}
+                  <FaEnvelope size={20} className="me-2" />
+                  {/* Email */}
+                  <span>
+                    <strong>Email:</strong> {user.email}
+                  </span>
+                </div>
+              </Card.Text>
+
+              <div className="text-center">
+                <Button variant="outline-danger" onClick={handleLogout}>
+                  <FaSignOutAlt /> Logout
+                </Button>
+              </div>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
+    </Container>
   );
 };
 
