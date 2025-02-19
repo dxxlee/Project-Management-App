@@ -7,6 +7,8 @@ from ..utils.security import get_password_hash, verify_password
 from ..database import get_database
 from ..config import settings
 from datetime import datetime
+from typing import List
+
 
 
 router = APIRouter()
@@ -62,3 +64,19 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 @router.get("/me", response_model=User)
 async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+@router.get("/users", response_model=List[User])
+async def get_all_users(current_user=Depends(get_current_user)):
+    """
+    Возвращает список всех пользователей.
+    При необходимости добавьте проверку прав (например, только админ может видеть всех).
+    """
+    db = get_database()
+    users_cursor = db["users"].find({})
+    users_list = await users_cursor.to_list(None)
+    result = []
+    for user in users_list:
+        user["id"] = str(user["_id"])
+        del user["_id"]
+        result.append(User(**user))
+    return result

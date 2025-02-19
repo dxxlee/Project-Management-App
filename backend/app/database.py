@@ -20,15 +20,18 @@ class Database:
     client: AsyncIOMotorClient = None
 
     async def connect(self):
+        # Регистрируем слушатель команд (логирование)
         monitoring.register(CommandLogger())
+
         self.client = AsyncIOMotorClient(
             settings.MONGODB_URL,
             maxPoolSize=settings.MAX_CONNECTIONS_COUNT,
             minPoolSize=settings.MIN_CONNECTIONS_COUNT,
         )
         try:
-            await self.client.admin.command('ping')
-            logger.info(" Successfully connected to MongoDB!")
+            # Проверяем соединение
+            await self.client.admin.command("ping")
+            logger.info("Successfully connected to MongoDB!")
         except Exception as e:
             logger.error(f"Could not connect to MongoDB: {e}")
             raise
@@ -38,9 +41,13 @@ class Database:
             self.client.close()
             logger.info("MongoDB connection closed")
 
+# Создаём экземпляр класса Database
 db = Database()
 
 def get_database():
+    """
+    Возвращает объект типа AsyncIOMotorDatabase, с которым можно работать как с db["collection"].
+    """
     if db.client is None:
         raise RuntimeError("Database connection has not been initialized. Call db.connect() first.")
-    return db.client["NoSqlDatabase"] 
+    return db.client[settings.DATABASE_NAME]

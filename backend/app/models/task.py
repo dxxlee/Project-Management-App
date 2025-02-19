@@ -3,6 +3,8 @@ from typing import List, Optional
 from datetime import datetime
 from enum import Enum
 
+
+
 class TaskStatus(str, Enum):
     TODO = "todo"
     IN_PROGRESS = "in_progress"
@@ -10,10 +12,10 @@ class TaskStatus(str, Enum):
     DONE = "done"
 
 class TaskPriority(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
 
 class Task(BaseModel):
     id: Optional[str] = None

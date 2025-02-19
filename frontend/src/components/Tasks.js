@@ -49,16 +49,20 @@ const Tasks = () => {
   const fetchTasks = async (projectId) => {
     setLoading(true);
     try {
-      const response = await api.get(`/api/project/${projectId}/tasks`);
+      console.log('Fetching tasks for project:', projectId); // Отладочный лог
+      const response = await api.get(`/api/projects/${projectId}/tasks`);
+      console.log('Response:', response.data); // Отладочный лог
+      
       const groupedTasks = {
-        'todo': response.data.filter(task => task.status === 'TODO'),
-        'in_progress': response.data.filter(task => task.status === 'IN_PROGRESS'),
-        'review': response.data.filter(task => task.status === 'REVIEW'),
-        'done': response.data.filter(task => task.status === 'DONE')
+        'todo': response.data.filter(task => task.status === 'todo'),
+        'in_progress': response.data.filter(task => task.status === 'in_progress'),
+        'review': response.data.filter(task => task.status === 'review'),
+        'done': response.data.filter(task => task.status === 'done')
       };
       setTasks(groupedTasks);
     } catch (error) {
-      toast.error('Failed to fetch tasks');
+      console.error('Error fetching tasks:', error.response || error);
+      toast.error(error.response?.data?.detail || 'Failed to fetch tasks');
     } finally {
       setLoading(false);
     }
@@ -67,27 +71,42 @@ const Tasks = () => {
   const handleCreateTask = async (e) => {
     e.preventDefault();
     try {
-      const response = await api.post(`/api/${selectedProject}/tasks`, {
-        ...newTask,
-        project_id: selectedProject
-      });
-      await fetchTasks(selectedProject);
-      setNewTask({
-        title: '',
-        description: '',
-        priority: 'MEDIUM',
-        due_date: '',
-        assignee_id: ''
-      });
-      toast.success('Task created successfully');
+        // Format the date properly if it exists
+        const formattedTask = {
+            ...newTask,
+            due_date: newTask.due_date ? new Date(newTask.due_date).toISOString() : null,
+            // Only include assignee_id if it's not empty
+            assignee_id: newTask.assignee_id || null,
+            // Ensure these fields are present
+            labels: newTask.labels || [],
+            comments: newTask.comments || []
+        };
+
+        const response = await api.post(`/api/projects/${selectedProject}/tasks`, formattedTask);
+        
+        await fetchTasks(selectedProject);
+        // Reset form
+        setNewTask({
+            title: '',
+            description: '',
+            priority: 'MEDIUM',
+            status: 'todo',
+            due_date: null,
+            assignee_id: null,
+            labels: [],
+            comments: []
+        });
+        toast.success('Task created successfully');
     } catch (error) {
-      toast.error('Failed to create task');
+        console.error('Task creation error:', error.response?.data);
+        toast.error(error.response?.data?.detail || 'Failed to create task');
     }
-  };
+};
+  
 
   const handleUpdateTaskStatus = async (taskId, newStatus) => {
     try {
-      await api.put(`/api/tasks/${taskId}/status`, { status: newStatus });
+      await api.put(`/api/tasks/${taskId}/status?status=${newStatus}`);
       await fetchTasks(selectedProject);
       toast.success('Task status updated');
     } catch (error) {
@@ -102,7 +121,7 @@ const Tasks = () => {
     if (source.droppableId === destination.droppableId) return;
 
     try {
-      await handleUpdateTaskStatus(draggableId, destination.droppableId.toUpperCase());
+      await handleUpdateTaskStatus(draggableId, destination.droppableId);
     } catch (error) {
       toast.error('Failed to move task');
     }
@@ -148,10 +167,10 @@ const Tasks = () => {
               onChange={(e) => setNewTask({...newTask, priority: e.target.value})}
               className="w-full p-2 border rounded"
             >
-              <option value="LOW">Low</option>
-              <option value="MEDIUM">Medium</option>
-              <option value="HIGH">High</option>
-              <option value="CRITICAL">Critical</option>
+              <option value="LOW">LOW</option>
+              <option value="MEDIUM">MEDIUM</option>
+              <option value="HIGH">HIGH</option>
+              <option value="CRITICAL">CRITICAL</option>
             </select>
             <input
               type="date"

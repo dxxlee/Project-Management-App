@@ -53,8 +53,9 @@ async def shutdown():
 # Подключаем роуты
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
-app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
+app.include_router(tasks.router, prefix="/api", tags=["tasks"])
 app.include_router(teams.router, prefix="/api/teams", tags=["teams"])
+app.include_router(auth.router, prefix="/api", tags=["users"])
 
 if __name__ == "__main__":
     import uvicorn
