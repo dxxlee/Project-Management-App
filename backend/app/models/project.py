@@ -1,6 +1,9 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
+from fastapi import FastAPI
+
+app = FastAPI()  # Убедись, что у тебя есть объект FastAPI
 
 class ProjectBase(BaseModel):
     name: str
@@ -20,3 +23,9 @@ class Project(ProjectBase):
 
     class Config:
         populate_by_name = True
+
+@app.on_event("startup")
+async def create_indexes():
+    from app.db import db  # Импортируем db внутри функции, чтобы избежать циклического импорта
+    await db["projects"].create_index([("members", 1)])
+    await db["projects"].create_index([("team_id", 1)])

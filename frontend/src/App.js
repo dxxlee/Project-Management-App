@@ -3,7 +3,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 // Импорты компонентов
 import Home from './components/Home';
-import Dashboard from './components/Dashboard';
+import ProjectDashboard from './components/ProjectDashboard';
 import Projects from './components/Projects';
 import Tasks from './components/Tasks';
 import Teams from './components/Teams';
@@ -12,6 +12,7 @@ import Register from './components/Auth/Register';
 import PrivateRoute from './components/PrivateRoute';
 import Navbar from './components/Navbar';
 import { AuthContext } from './context/AuthContext';
+import Navigation from './components/Navigation';
 
 const App = () => {
   const { user, isLoading } = React.useContext(AuthContext);
@@ -51,7 +52,7 @@ const App = () => {
                   element={
                     user ? (
                       <PrivateRoute> {/* Защищаем Dashboard */}
-                        <Dashboard />
+                        <ProjectDashboard />
                       </PrivateRoute>
                     ) : (
                       <Navigate to="/login" /> // Редирект на логин, если не залогинен
@@ -88,6 +89,18 @@ const App = () => {
                     user ? (
                       <PrivateRoute>
                         <Teams />
+                      </PrivateRoute>
+                    ) : (
+                      <Navigate to="/login" />
+                    )
+                  }
+                />
+                <Route
+                  path="/navigation" // Пример защищенного маршрута Navigation
+                  element={
+                    user ? (
+                      <PrivateRoute>
+                        <Navigation />
                       </PrivateRoute>
                     ) : (
                       <Navigate to="/login" />
