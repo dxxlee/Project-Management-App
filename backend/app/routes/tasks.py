@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, FastAPI
-from typing import List, Optional
+from typing import List, Optional, Any
 from datetime import datetime
 from bson import ObjectId
 
@@ -11,6 +11,8 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from pydantic import ValidationError
 from fastapi import Query
+from datetime import datetime, timezone
+
 
 
 router = APIRouter()
@@ -153,9 +155,6 @@ async def get_task(task_id: str, current_user=Depends(get_current_user)):
     return Task(**task_data)
 
 
-# =========================================================
-#  ОБНОВЛЕНИЕ ОДНОЙ ЗАДАЧИ (с правами)
-# =========================================================
 @router.put("/tasks/{task_id}", response_model=Task)
 async def update_task_with_permissions(
     task_id: str,
@@ -168,7 +167,7 @@ async def update_task_with_permissions(
     db = get_database()
     user_id = str(current_user.id)
 
-    # Находим задачу
+    # Находим существующую задачу
     existing_task = await db["tasks"].find_one({"_id": ObjectId(task_id)})
     if not existing_task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -178,7 +177,7 @@ async def update_task_with_permissions(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Проверяем, есть ли у пользователя роль owner/admin
+    # Проверяем, имеет ли пользователь роль owner/admin (через команду или напрямую)
     is_admin = False
     team_id = project.get("team_id")
     if team_id:
@@ -189,20 +188,20 @@ async def update_task_with_permissions(
                     is_admin = True
                     break
     else:
-        # Если нет команды, проверяем, является ли пользователь владельцем проекта
         if project.get("owner_id") == user_id:
             is_admin = True
 
-    # Если пользователь не админ, он может менять только статус своих задач
-    update_data = task_update.model_dump(exclude_unset=True)
+    # Получаем только изменённые поля
+    update_data = task_update.dict(exclude_unset=True)
+    print("Received update data:", update_data)  # Отладочный вывод
+
+    # Если пользователь не админ, разрешаем изменять только статус, если задача назначена на него
     if not is_admin:
-        # Проверяем, что задача назначена на него
         if existing_task.get("assignee_id") != user_id:
             raise HTTPException(
                 status_code=403,
                 detail="You can only update tasks assigned to you"
             )
-        # Разрешаем менять только поле 'status'
         allowed_fields = {"status"}
         if not set(update_data.keys()).issubset(allowed_fields):
             raise HTTPException(
@@ -210,17 +209,20 @@ async def update_task_with_permissions(
                 detail="You can only update task status"
             )
 
-    # Обновляем задачу
+    # Добавляем время обновления
     update_data["updated_at"] = datetime.utcnow()
+
+    # Выполняем обновление
     await db["tasks"].update_one(
         {"_id": ObjectId(task_id)},
         {"$set": update_data}
     )
 
-    # Возвращаем обновлённый документ
+    # Считываем обновлённый документ, преобразовывая _id в строку
     updated = await db["tasks"].find_one({"_id": ObjectId(task_id)})
     updated["id"] = str(updated["_id"])
     del updated["_id"]
+
     return Task(**updated)
 
 
@@ -428,3 +430,104 @@ async def assign_task(
         raise HTTPException(status_code=404, detail="Task not found")
 
     return {"status": "success", "message": "Task assigned successfully"}
+
+
+# Aggregation Framework
+
+def convert_objectids(obj):
+    """
+    Рекурсивно обходит структуру (dict, list) 
+    и преобразует все ObjectId -> str(ObjectId).
+    """
+    if isinstance(obj, list):
+        return [convert_objectids(v) for v in obj]
+    if isinstance(obj, dict):
+        return {k: convert_objectids(v) for k, v in obj.items()}
+    if isinstance(obj, ObjectId):
+        return str(obj)
+    return obj
+
+@router.get("/aggregation/full_summary", response_model=Any)
+async def full_aggregation_summary(
+    project_id: Optional[str] = None,
+    current_user=Depends(get_current_user)
+):
+    """
+    Пример многоступенчатого пайплайна:
+      1. $match (если передан project_id)
+      2. $facet (summaryByStatus и bucketByDueDate)
+      3. $merge (в коллекцию 'full_summary')
+    Возвращаем последний документ из full_summary, 
+    предварительно конвертируя все ObjectId в строки.
+    """
+    db = get_database()
+
+    pipeline = []
+    if project_id:
+        pipeline.append({"$match": {"project_id": project_id}})
+
+    pipeline.append({
+        "$facet": {
+            "summaryByStatus": [
+                {"$unwind": {"path": "$labels", "preserveNullAndEmptyArrays": True}},
+                {"$group": {
+                    "_id": {"status": "$status", "label": "$labels"},
+                    "count": {"$sum": 1}
+                }},
+                {"$project": {
+                    "_id": 0,
+                    "status": "$_id.status",
+                    "label": "$_id.label",
+                    "count": 1
+                }},
+                {"$group": {
+                    "_id": "$status",
+                    "total": {"$sum": "$count"},
+                    "labels": {"$push": {"label": "$label", "count": "$count"}}
+                }},
+                {"$sort": {"_id": 1}}
+            ],
+            "bucketByDueDate": [
+                {
+                    "$bucket": {
+                        "groupBy": "$due_date",
+                        "boundaries": [
+                            datetime(2023, 1, 1, tzinfo=timezone.utc),
+                            datetime(2023, 6, 1, tzinfo=timezone.utc),
+                            datetime(2024, 1, 1, tzinfo=timezone.utc),
+                            datetime(2025, 1, 1, tzinfo=timezone.utc)
+                        ],
+                        "default": "Other",
+                        "output": {
+                            "count": {"$sum": 1},
+                            "tasks": {"$push": "$title"}
+                        }
+                    }
+                }
+            ]
+        }
+    })
+
+    pipeline.append({
+        "$merge": {
+            "into": "full_summary",
+            "whenMatched": "replace",
+            "whenNotMatched": "insert"
+        }
+    })
+
+    try:
+        # Выполняем пайплайн
+        await db["tasks"].aggregate(pipeline).to_list(length=None)
+
+        # Считываем последний документ из full_summary
+        docs = await db["full_summary"].find({}).sort("_id", -1).limit(1).to_list(None)
+        if not docs:
+            return {}
+
+        # Преобразуем все ObjectId -> str
+        doc_converted = convert_objectids(docs[0])
+        return doc_converted
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

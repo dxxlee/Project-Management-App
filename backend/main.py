@@ -7,6 +7,7 @@ from app.routes import auth, projects, tasks, teams
 from app.database import get_database
 from app.init_schema import init_schema_validation
 from app.indexing import create_indexes
+from app.sharding import configure_sharding
 
 
 
@@ -34,7 +35,8 @@ app.add_middleware(AuditMiddleware)
 async def startup():
     await db.connect()
     await init_schema_validation()
-    await create_indexes()  
+    await create_indexes()
+    # await configure_sharding() 
     
     # Получаем базу данных
     db_instance = db.client.get_database()

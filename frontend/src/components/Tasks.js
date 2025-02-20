@@ -10,7 +10,9 @@ import {
   Badge,
   Dropdown,
   Stack,
-  Spinner
+  Spinner,
+  Modal,
+  Table
 } from 'react-bootstrap';
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import {
@@ -52,6 +54,15 @@ const Tasks = () => {
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
+  // Состояния для "полной" агрегации (full_summary)
+  const [fullAggregation, setFullAggregation] = useState({});
+  const [showFullAggModal, setShowFullAggModal] = useState(false);
+  const [fullAggLoading, setFullAggLoading] = useState(false);
+
+  // Состояния для редактирования задачи
+  const [editingTask, setEditingTask] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+
   useEffect(() => {
     fetchProjects();
     fetchUsers();
@@ -88,13 +99,12 @@ const Tasks = () => {
     }
   };
 
-  const fetchTasks = async (projectId) => {
+  const fetchTasks = async (projId) => {
     setLoading(true);
     try {
-      console.log('Fetching tasks for project:', projectId); // Отладочный лог
-      const response = await api.get(`/api/projects/${projectId}/tasks`);
-      console.log('Response:', response.data); // Отладочный лог
-
+      console.log('Fetching tasks for project:', projId);
+      const response = await api.get(`/api/projects/${projId}/tasks`);
+      console.log('Response:', response.data);
       const groupedTasks = {
         'todo': response.data.filter(task => task.status === 'todo'),
         'in_progress': response.data.filter(task => task.status === 'in_progress'),
@@ -118,10 +128,8 @@ const Tasks = () => {
         due_date: newTask.due_date ? new Date(newTask.due_date).toISOString() : null,
         assignee_id: newTask.assignee_id || null
       };
-
       await api.post(`/api/projects/${projectId}/tasks`, formattedTask);
       await fetchTasks(projectId);
-
       setNewTask({
         title: '',
         description: '',
@@ -136,7 +144,6 @@ const Tasks = () => {
     }
   };
 
-
   const handleUpdateTaskStatus = async (taskId, newStatus) => {
     try {
       await api.put(`/api/tasks/${taskId}/status?status=${newStatus}`);
@@ -149,14 +156,70 @@ const Tasks = () => {
 
   const onDragEnd = async (result) => {
     if (!result.destination) return;
-
     const { draggableId, source, destination } = result;
     if (source.droppableId === destination.droppableId) return;
-
     try {
       await handleUpdateTaskStatus(draggableId, destination.droppableId);
     } catch (error) {
       toast.error('Failed to move task');
+    }
+  };
+
+  // Функция для редактирования задачи: открывает модальное окно с предзаполненными данными
+  const handleEditTask = (task) => {
+    setEditingTask({ ...task });
+    setShowEditModal(true);
+  };
+
+  // Функция сохранения изменений редактирования
+  const handleSaveEditTask = async () => {
+    try {
+      const updateData = {
+        title: editingTask.title,
+        description: editingTask.description,
+        priority: editingTask.priority,
+        due_date: editingTask.due_date ? new Date(editingTask.due_date).toISOString() : null,
+        assignee_id: editingTask.assignee_id || null
+      };
+  
+      console.log("Sending update request:", updateData);
+  
+      await api.put(`/api/tasks/${editingTask.id}`, updateData);
+      await fetchTasks(selectedProject);
+      setShowEditModal(false);
+      setEditingTask(null);
+      toast.success('Task updated successfully');
+    } catch (error) {
+      console.error("Update error:", error.response?.data);
+      toast.error(error.response?.data?.detail || 'Failed to update task');
+    }
+  };
+
+  // Функция для обработки изменений в форме редактирования
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    setEditingTask(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  // Функция для агрегации полной сводки
+  const fetchFullAggregation = async () => {
+    setFullAggLoading(true);
+    try {
+      const response = await api.get('/api/aggregation/full_summary', {
+        params: { project_id: selectedProject }
+      });
+      console.log("Full Aggregation summary:", response.data);
+      setFullAggregation(response.data);
+      setShowFullAggModal(true);
+      toast.success('Full aggregation fetched successfully');
+    } catch (error) {
+      console.error('Full Aggregation fetch error:', error.response?.data || error.message);
+      toast.error(error.response?.data?.detail || 'Failed to fetch full aggregation');
+    } finally {
+      setFullAggLoading(false);
     }
   };
 
@@ -191,6 +254,20 @@ const Tasks = () => {
               New Task
             </Button>
 
+            {/* Кнопка "полной" агрегации */}
+            <Button
+              variant="outline-dark"
+              onClick={fetchFullAggregation}
+              className="ms-2"
+              disabled={fullAggLoading}
+            >
+              {fullAggLoading ? (
+                <Spinner animation="border" size="sm" />
+              ) : (
+                "Full Aggregation"
+              )}
+            </Button>
+
             {showCreateForm && (
               <Card className="mt-3">
                 <Card.Body>
@@ -202,17 +279,16 @@ const Tasks = () => {
                           <Form.Control
                             required
                             value={newTask.title}
-                            onChange={e => setNewTask({...newTask, title: e.target.value})}
+                            onChange={e => setNewTask({ ...newTask, title: e.target.value })}
                           />
                         </Form.Group>
                       </Col>
-
                       <Col md={6}>
                         <Form.Group>
                           <Form.Label>Assignee</Form.Label>
                           <Form.Select
                             value={newTask.assignee_id}
-                            onChange={e => setNewTask({...newTask, assignee_id: e.target.value})}
+                            onChange={e => setNewTask({ ...newTask, assignee_id: e.target.value })}
                           >
                             <option>Unassigned</option>
                             {users.map(user => (
@@ -221,13 +297,12 @@ const Tasks = () => {
                           </Form.Select>
                         </Form.Group>
                       </Col>
-
                       <Col md={6}>
                         <Form.Group>
                           <Form.Label>Priority</Form.Label>
                           <Form.Select
                             value={newTask.priority}
-                            onChange={e => setNewTask({...newTask, priority: e.target.value})}
+                            onChange={e => setNewTask({ ...newTask, priority: e.target.value })}
                           >
                             {Object.entries(priorityColors).map(([key]) => (
                               <option key={key} value={key}>{key}</option>
@@ -235,18 +310,16 @@ const Tasks = () => {
                           </Form.Select>
                         </Form.Group>
                       </Col>
-
                       <Col md={6}>
                         <Form.Group>
                           <Form.Label>Due Date</Form.Label>
                           <Form.Control
                             type="date"
                             value={newTask.due_date}
-                            onChange={e => setNewTask({...newTask, due_date: e.target.value})}
+                            onChange={e => setNewTask({ ...newTask, due_date: e.target.value })}
                           />
                         </Form.Group>
                       </Col>
-
                       <Col md={12}>
                         <Form.Group>
                           <Form.Label>Description</Form.Label>
@@ -254,11 +327,10 @@ const Tasks = () => {
                             as="textarea"
                             rows={3}
                             value={newTask.description}
-                            onChange={e => setNewTask({...newTask, description: e.target.value})}
+                            onChange={e => setNewTask({ ...newTask, description: e.target.value })}
                           />
                         </Form.Group>
                       </Col>
-
                       <Col xs={12}>
                         <div className="d-flex justify-content-end gap-2">
                           <Button
@@ -320,26 +392,36 @@ const Tasks = () => {
                                           <div className="d-flex justify-content-between align-items-start mb-2">
                                             <h6 className="mb-0">{task.title}</h6>
                                             <Dropdown>
-                                              <Dropdown.Toggle
-                                                variant="link"
-                                                className="p-0 text-dark"
-                                              >
+                                              <Dropdown.Toggle variant="link" className="p-0 text-dark">
                                                 <ThreeDotsVertical />
                                               </Dropdown.Toggle>
                                               <Dropdown.Menu>
-                                                <Dropdown.Item>Edit</Dropdown.Item>
-                                                <Dropdown.Item>Delete</Dropdown.Item>
+                                                <Dropdown.Item onClick={() => handleEditTask(task)}>
+                                                  Edit
+                                                </Dropdown.Item>
+                                                <Dropdown.Item onClick={() => {
+                                                  if(window.confirm("Are you sure you want to delete this task?")) {
+                                                    api.delete(`/api/tasks/${task.id}`)
+                                                      .then(() => {
+                                                        fetchTasks(selectedProject);
+                                                        toast.success("Task deleted successfully");
+                                                      })
+                                                      .catch(err => toast.error(err.response?.data?.detail || "Failed to delete task"));
+                                                  }
+                                                }}>
+                                                  Delete
+                                                </Dropdown.Item>
                                               </Dropdown.Menu>
                                             </Dropdown>
                                           </div>
-                                          <p className="small text-muted mb-2">
-                                            {task.description}
-                                          </p>
+                                          <p className="small text-muted mb-2">{task.description}</p>
                                           <Stack gap={2} direction="horizontal">
-                                            {task.assignee && (
+                                            {task.assignee_id && (
                                               <Badge bg="light" text="dark" className="d-flex align-items-center">
                                                 <PersonFill className="me-1" />
-                                                {task.assignee.username}
+                                                {
+                                                  (users.find(u => u.id === task.assignee_id) || {}).username || "Unassigned"
+                                                }
                                               </Badge>
                                             )}
                                             {task.due_date && (
@@ -350,10 +432,7 @@ const Tasks = () => {
                                             )}
                                           </Stack>
                                         </div>
-                                        <Badge
-                                          bg={priorityColors[task.priority]}
-                                          className="align-self-start"
-                                        >
+                                        <Badge bg={priorityColors[task.priority]} className="align-self-start">
                                           {task.priority}
                                         </Badge>
                                       </Stack>
@@ -378,6 +457,154 @@ const Tasks = () => {
           <Spinner animation="border" variant="primary" />
         </div>
       ) : null}
+
+      {/* Модальное окно для отображения "полной" агрегации */}
+      <Modal
+        show={showFullAggModal}
+        onHide={() => setShowFullAggModal(false)}
+        size="lg"
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Full Aggregation Summary</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {Object.keys(fullAggregation).length > 0 ? (
+            <>
+              <h5>Summary by Status</h5>
+              <Table striped bordered hover size="sm">
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Total Tasks</th>
+                    <th>Labels</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fullAggregation.summaryByStatus && fullAggregation.summaryByStatus.map((statusItem, idx) => (
+                    <tr key={idx}>
+                      <td>{statusItem._id}</td>
+                      <td>{statusItem.total}</td>
+                      <td>
+                        {statusItem.labels.map((labelObj, i) => (
+                          <div key={i}>
+                            {labelObj.label || 'No Label'}: {labelObj.count}
+                          </div>
+                        ))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+              <hr />
+              <h5>Bucket by Due Date</h5>
+              <Table striped bordered hover size="sm">
+                <thead>
+                  <tr>
+                    <th>Bucket</th>
+                    <th>Count</th>
+                    <th>Tasks</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fullAggregation.bucketByDueDate && fullAggregation.bucketByDueDate.map((bucket, idx) => (
+                    <tr key={idx}>
+                      <td>{bucket._id}</td>
+                      <td>{bucket.count}</td>
+                      <td>{bucket.tasks.join(', ')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </>
+          ) : (
+            <p>No full aggregation data available.</p>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowFullAggModal(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Модальное окно для редактирования задачи */}
+      <Modal
+        show={showEditModal}
+        onHide={() => setShowEditModal(false)}
+        size="lg"
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Edit Task</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {editingTask && (
+            <Form>
+              <Form.Group className="mb-3">
+                <Form.Label>Title</Form.Label>
+                <Form.Control
+                  name="title"
+                  value={editingTask.title}
+                  onChange={handleEditChange}
+                />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>Assignee</Form.Label>
+                <Form.Select
+                  name="assignee_id"
+                  value={editingTask.assignee_id || ""}
+                  onChange={handleEditChange}
+                >
+                  <option value="">Unassigned</option>
+                  {users.map(user => (
+                    <option key={user.id} value={user.id}>{user.username}</option>
+                  ))}
+                </Form.Select>
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>Priority</Form.Label>
+                <Form.Select
+                  name="priority"
+                  value={editingTask.priority}
+                  onChange={handleEditChange}
+                >
+                  {Object.entries(priorityColors).map(([key]) => (
+                    <option key={key} value={key}>{key}</option>
+                  ))}
+                </Form.Select>
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>Due Date</Form.Label>
+                <Form.Control
+                  type="date"
+                  name="due_date"
+                  value={editingTask.due_date ? editingTask.due_date.substring(0,10) : ""}
+                  onChange={handleEditChange}
+                />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>Description</Form.Label>
+                <Form.Control
+                  as="textarea"
+                  rows={3}
+                  name="description"
+                  value={editingTask.description}
+                  onChange={handleEditChange}
+                />
+              </Form.Group>
+            </Form>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowEditModal(false)}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={handleSaveEditTask}>
+            Save Changes
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </Container>
   );
 };
