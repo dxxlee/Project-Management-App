@@ -12,7 +12,6 @@ import Register from './components/Auth/Register';
 import PrivateRoute from './components/PrivateRoute';
 import Navbar from './components/Navbar';
 import { AuthContext } from './context/AuthContext';
-import Navigation from './components/Navigation';
 
 const App = () => {
   const { user, isLoading } = React.useContext(AuthContext);
@@ -112,7 +111,7 @@ const App = () => {
                   element={
                     user ? (
                       <PrivateRoute>
-                        <Navigation />
+                        <Navbar />
                       </PrivateRoute>
                     ) : (
                       <Navigate to="/login" />
