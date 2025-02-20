@@ -34,7 +34,7 @@ const Footer = () => {
     <StyledFooter>
       <Container fluid="lg">
         <div className="footer-content">
-          © 2023{' '}
+          © 2025{' '}
           <a
             href="http://localhost:3000"
             target="_blank"

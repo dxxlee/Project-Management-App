@@ -85,3 +85,19 @@ async def get_team_projects(team_id: str, current_user=Depends(get_current_user)
         del project["_id"]
         transformed_projects.append(Project(**project))
     return transformed_projects
+
+
+@router.get("/", response_model=List[Team])
+async def get_teams(current_user=Depends(get_current_user)):
+    """
+    Retrieves all teams where the user is a member.
+    """
+    db = get_database()
+    teams_cursor = db["teams"].find({"members.user_id": str(current_user.id)})
+    teams = await teams_cursor.to_list(length=None)
+
+    for team in teams:
+        team["id"] = str(team["_id"])
+        del team["_id"]
+
+    return [Team(**team) for team in teams]
