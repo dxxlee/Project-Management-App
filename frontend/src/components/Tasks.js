@@ -1,10 +1,44 @@
 import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
+import {
+  Container,
+  Row,
+  Col,
+  Form,
+  Button,
+  Card,
+  Badge,
+  Dropdown,
+  Stack,
+  Spinner
+} from 'react-bootstrap';
+import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+import {
+  PlusCircle,
+  Calendar,
+  PersonFill,
+  ThreeDotsVertical
+} from 'react-bootstrap-icons';
 import api from '../api';
 import { toast } from 'react-toastify';
-import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+
+const statusConfig = {
+  todo: { title: 'To Do', color: 'secondary' },
+  in_progress: { title: 'In Progress', color: 'primary' },
+  review: { title: 'Review', color: 'warning' },
+  done: { title: 'Done', color: 'success' }
+};
+
+const priorityColors = {
+  LOW: 'success',
+  MEDIUM: 'warning',
+  HIGH: 'danger',
+  CRITICAL: 'dark'
+};
 
 const Tasks = () => {
-  const [tasks, setTasks] = useState([]);
+  const { projectId } = useParams();
+  const [tasks, setTasks] = useState({});
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState('');
   const [newTask, setNewTask] = useState({
@@ -16,11 +50,19 @@ const Tasks = () => {
   });
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   useEffect(() => {
     fetchProjects();
     fetchUsers();
   }, []);
+
+  useEffect(() => {
+    if (projectId) {
+      setSelectedProject(projectId);
+      fetchTasks(projectId);
+    }
+  }, [projectId]);
 
   useEffect(() => {
     if (selectedProject) {
@@ -52,7 +94,7 @@ const Tasks = () => {
       console.log('Fetching tasks for project:', projectId); // Отладочный лог
       const response = await api.get(`/api/projects/${projectId}/tasks`);
       console.log('Response:', response.data); // Отладочный лог
-      
+
       const groupedTasks = {
         'todo': response.data.filter(task => task.status === 'todo'),
         'in_progress': response.data.filter(task => task.status === 'in_progress'),
@@ -71,38 +113,29 @@ const Tasks = () => {
   const handleCreateTask = async (e) => {
     e.preventDefault();
     try {
-        // Format the date properly if it exists
-        const formattedTask = {
-            ...newTask,
-            due_date: newTask.due_date ? new Date(newTask.due_date).toISOString() : null,
-            // Only include assignee_id if it's not empty
-            assignee_id: newTask.assignee_id || null,
-            // Ensure these fields are present
-            labels: newTask.labels || [],
-            comments: newTask.comments || []
-        };
+      const formattedTask = {
+        ...newTask,
+        due_date: newTask.due_date ? new Date(newTask.due_date).toISOString() : null,
+        assignee_id: newTask.assignee_id || null
+      };
 
-        const response = await api.post(`/api/projects/${selectedProject}/tasks`, formattedTask);
-        
-        await fetchTasks(selectedProject);
-        // Reset form
-        setNewTask({
-            title: '',
-            description: '',
-            priority: 'MEDIUM',
-            status: 'todo',
-            due_date: null,
-            assignee_id: null,
-            labels: [],
-            comments: []
-        });
-        toast.success('Task created successfully');
+      await api.post(`/api/projects/${projectId}/tasks`, formattedTask);
+      await fetchTasks(projectId);
+
+      setNewTask({
+        title: '',
+        description: '',
+        priority: 'MEDIUM',
+        due_date: '',
+        assignee_id: ''
+      });
+      setShowCreateForm(false);
+      toast.success('Task created successfully');
     } catch (error) {
-        console.error('Task creation error:', error.response?.data);
-        toast.error(error.response?.data?.detail || 'Failed to create task');
+      toast.error(error.response?.data?.detail || 'Failed to create task');
     }
-};
-  
+  };
+
 
   const handleUpdateTaskStatus = async (taskId, newStatus) => {
     try {
@@ -116,7 +149,7 @@ const Tasks = () => {
 
   const onDragEnd = async (result) => {
     if (!result.destination) return;
-    
+
     const { draggableId, source, destination } = result;
     if (source.droppableId === destination.droppableId) return;
 
@@ -128,135 +161,224 @@ const Tasks = () => {
   };
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Tasks Management</h1>
-      
-      {/* Project Selection */}
-      <select
-        value={selectedProject}
-        onChange={(e) => setSelectedProject(e.target.value)}
-        className="w-full p-2 border rounded mb-4"
-      >
-        <option value="">Select Project</option>
-        {projects.map(project => (
-          <option key={project.id} value={project.id}>{project.name}</option>
-        ))}
-      </select>
-
-      {/* New Task Form */}
-      {selectedProject && (
-        <form onSubmit={handleCreateTask} className="mb-6">
-          <h2 className="text-xl font-semibold mb-3">Create New Task</h2>
-          <div className="space-y-3">
-            <input
-              type="text"
-              placeholder="Task Title"
-              value={newTask.title}
-              onChange={(e) => setNewTask({...newTask, title: e.target.value})}
-              className="w-full p-2 border rounded"
-              required
-            />
-            <textarea
-              placeholder="Description"
-              value={newTask.description}
-              onChange={(e) => setNewTask({...newTask, description: e.target.value})}
-              className="w-full p-2 border rounded"
-            />
-            <select
-              value={newTask.priority}
-              onChange={(e) => setNewTask({...newTask, priority: e.target.value})}
-              className="w-full p-2 border rounded"
-            >
-              <option value="LOW">LOW</option>
-              <option value="MEDIUM">MEDIUM</option>
-              <option value="HIGH">HIGH</option>
-              <option value="CRITICAL">CRITICAL</option>
-            </select>
-            <input
-              type="date"
-              value={newTask.due_date}
-              onChange={(e) => setNewTask({...newTask, due_date: e.target.value})}
-              className="w-full p-2 border rounded"
-            />
-            <select
-              value={newTask.assignee_id}
-              onChange={(e) => setNewTask({...newTask, assignee_id: e.target.value})}
-              className="w-full p-2 border rounded"
-            >
-              <option value="">Assign to...</option>
-              {users.map(user => (
-                <option key={user.id} value={user.id}>{user.username}</option>
-              ))}
-            </select>
-            <button
-              type="submit"
-              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-            >
-              Create Task
-            </button>
-          </div>
-        </form>
-      )}
-
-      {/* Tasks Kanban Board */}
-      {selectedProject && !loading && (
-        <DragDropContext onDragEnd={onDragEnd}>
-          <div className="grid grid-cols-4 gap-4">
-            {['todo', 'in_progress', 'review', 'done'].map(status => (
-              <div key={status} className="bg-gray-100 p-4 rounded">
-                <h3 className="text-lg font-semibold mb-3 capitalize">
-                  {status.replace('_', ' ')}
-                </h3>
-                <Droppable droppableId={status}>
-                  {(provided) => (
-                    <div
-                      {...provided.droppableProps}
-                      ref={provided.innerRef}
-                      className="space-y-2"
-                    >
-                      {tasks[status]?.map((task, index) => (
-                        <Draggable
-                          key={task.id}
-                          draggableId={task.id}
-                          index={index}
-                        >
-                          {(provided) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              {...provided.dragHandleProps}
-                              className="bg-white p-3 rounded shadow"
-                            >
-                              <h4 className="font-medium">{task.title}</h4>
-                              <p className="text-sm text-gray-600">{task.description}</p>
-                              <div className="mt-2 flex justify-between text-sm">
-                                <span className={`px-2 py-1 rounded ${
-                                  task.priority === 'HIGH' ? 'bg-red-100 text-red-800' :
-                                  task.priority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
-                                  'bg-green-100 text-green-800'
-                                }`}>
-                                  {task.priority}
-                                </span>
-                                {task.due_date && (
-                                  <span className="text-gray-500">
-                                    Due: {new Date(task.due_date).toLocaleDateString()}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </div>
+    <Container fluid className="p-4">
+      <Row className="mb-4 align-items-center">
+        <Col>
+          <h1 className="h2 mb-0">Task Board</h1>
+        </Col>
+        <Col xs="auto">
+          <Form.Select
+            value={selectedProject}
+            onChange={(e) => setSelectedProject(e.target.value)}
+            style={{ minWidth: '200px' }}
+          >
+            <option>Select Project</option>
+            {projects.map(project => (
+              <option key={project.id} value={project.id}>{project.name}</option>
             ))}
-          </div>
-        </DragDropContext>
+          </Form.Select>
+        </Col>
+      </Row>
+
+      {selectedProject && (
+        <Row className="mb-4">
+          <Col>
+            <Button
+              variant="outline-primary"
+              onClick={() => setShowCreateForm(!showCreateForm)}
+            >
+              <PlusCircle className="me-2" />
+              New Task
+            </Button>
+
+            {showCreateForm && (
+              <Card className="mt-3">
+                <Card.Body>
+                  <Form onSubmit={handleCreateTask}>
+                    <Row className="g-3">
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label>Title</Form.Label>
+                          <Form.Control
+                            required
+                            value={newTask.title}
+                            onChange={e => setNewTask({...newTask, title: e.target.value})}
+                          />
+                        </Form.Group>
+                      </Col>
+
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label>Assignee</Form.Label>
+                          <Form.Select
+                            value={newTask.assignee_id}
+                            onChange={e => setNewTask({...newTask, assignee_id: e.target.value})}
+                          >
+                            <option>Unassigned</option>
+                            {users.map(user => (
+                              <option key={user.id} value={user.id}>{user.username}</option>
+                            ))}
+                          </Form.Select>
+                        </Form.Group>
+                      </Col>
+
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label>Priority</Form.Label>
+                          <Form.Select
+                            value={newTask.priority}
+                            onChange={e => setNewTask({...newTask, priority: e.target.value})}
+                          >
+                            {Object.entries(priorityColors).map(([key]) => (
+                              <option key={key} value={key}>{key}</option>
+                            ))}
+                          </Form.Select>
+                        </Form.Group>
+                      </Col>
+
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label>Due Date</Form.Label>
+                          <Form.Control
+                            type="date"
+                            value={newTask.due_date}
+                            onChange={e => setNewTask({...newTask, due_date: e.target.value})}
+                          />
+                        </Form.Group>
+                      </Col>
+
+                      <Col md={12}>
+                        <Form.Group>
+                          <Form.Label>Description</Form.Label>
+                          <Form.Control
+                            as="textarea"
+                            rows={3}
+                            value={newTask.description}
+                            onChange={e => setNewTask({...newTask, description: e.target.value})}
+                          />
+                        </Form.Group>
+                      </Col>
+
+                      <Col xs={12}>
+                        <div className="d-flex justify-content-end gap-2">
+                          <Button
+                            variant="outline-secondary"
+                            onClick={() => setShowCreateForm(false)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button type="submit" variant="primary">
+                            Create Task
+                          </Button>
+                        </div>
+                      </Col>
+                    </Row>
+                  </Form>
+                </Card.Body>
+              </Card>
+            )}
+          </Col>
+        </Row>
       )}
-    </div>
+
+      {selectedProject && !loading ? (
+        <DragDropContext onDragEnd={onDragEnd}>
+          <Row className="g-4">
+            {Object.entries(statusConfig).map(([statusKey, { title, color }]) => (
+              <Col key={statusKey} md={3}>
+                <Card className="border-0 shadow-sm">
+                  <Card.Header className={`bg-${color} bg-opacity-10 text-${color} d-flex justify-content-between`}>
+                    <span className="fw-semibold">{title}</span>
+                    <Badge bg={color} pill>
+                      {tasks[statusKey]?.length || 0}
+                    </Badge>
+                  </Card.Header>
+                  <Card.Body className="p-2">
+                    <Droppable droppableId={statusKey}>
+                      {(provided) => (
+                        <div
+                          {...provided.droppableProps}
+                          ref={provided.innerRef}
+                          className="h-100 min-vh-50"
+                        >
+                          {tasks[statusKey]?.map((task, index) => (
+                            <Draggable
+                              key={task.id}
+                              draggableId={task.id}
+                              index={index}
+                            >
+                              {(provided) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  {...provided.dragHandleProps}
+                                >
+                                  <Card className="mb-2 shadow-sm">
+                                    <Card.Body>
+                                      <Stack direction="horizontal" gap={2} className="align-items-start">
+                                        <div className="flex-grow-1">
+                                          <div className="d-flex justify-content-between align-items-start mb-2">
+                                            <h6 className="mb-0">{task.title}</h6>
+                                            <Dropdown>
+                                              <Dropdown.Toggle
+                                                variant="link"
+                                                className="p-0 text-dark"
+                                              >
+                                                <ThreeDotsVertical />
+                                              </Dropdown.Toggle>
+                                              <Dropdown.Menu>
+                                                <Dropdown.Item>Edit</Dropdown.Item>
+                                                <Dropdown.Item>Delete</Dropdown.Item>
+                                              </Dropdown.Menu>
+                                            </Dropdown>
+                                          </div>
+                                          <p className="small text-muted mb-2">
+                                            {task.description}
+                                          </p>
+                                          <Stack gap={2} direction="horizontal">
+                                            {task.assignee && (
+                                              <Badge bg="light" text="dark" className="d-flex align-items-center">
+                                                <PersonFill className="me-1" />
+                                                {task.assignee.username}
+                                              </Badge>
+                                            )}
+                                            {task.due_date && (
+                                              <Badge bg="light" text="dark" className="d-flex align-items-center">
+                                                <Calendar className="me-1" />
+                                                {new Date(task.due_date).toLocaleDateString()}
+                                              </Badge>
+                                            )}
+                                          </Stack>
+                                        </div>
+                                        <Badge
+                                          bg={priorityColors[task.priority]}
+                                          className="align-self-start"
+                                        >
+                                          {task.priority}
+                                        </Badge>
+                                      </Stack>
+                                    </Card.Body>
+                                  </Card>
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
+                  </Card.Body>
+                </Card>
+              </Col>
+            ))}
+          </Row>
+        </DragDropContext>
+      ) : selectedProject ? (
+        <div className="text-center py-5">
+          <Spinner animation="border" variant="primary" />
+        </div>
+      ) : null}
+    </Container>
   );
 };
 

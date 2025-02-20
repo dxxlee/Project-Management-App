@@ -1,23 +1,39 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api';
 import { toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import {
+  Container,
+  Row,
+  Col,
+  Card,
+  Button,
+  Form,
+  Alert,
+  Modal,
+  ListGroup
+} from 'react-bootstrap';
 
 const Teams = () => {
   const [teams, setTeams] = useState([]);
   const [newTeam, setNewTeam] = useState({ name: '', description: '' });
   const [editingTeam, setEditingTeam] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState(null);
+  const [newMember, setNewMember] = useState({ email: '', role: 'member' });
 
-  // Получение списка команд
   const fetchTeams = async () => {
+    setLoading(true);
     try {
       const response = await api.get('/api/teams');
       setTeams(response.data);
       setError(null);
     } catch (error) {
       setError(error.response?.data?.detail || 'Failed to fetch teams');
-      console.error('Error fetching teams:', error);
+      toast.error('Failed to fetch teams');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -25,35 +41,45 @@ const Teams = () => {
     fetchTeams();
   }, []);
 
-  // Создание новой команды
   const handleCreateTeam = async (e) => {
-  e.preventDefault();
-  try {
-    const response = await api.post('/api/teams', newTeam);
-    setTeams([...teams, response.data]);
-    setNewTeam({ name: '', description: '' });
-    toast.success('Team created successfully!');
-    fetchTeams(); // Обновляем список команд
-  } catch (error) {
-    toast.error('Failed to create team');
-    console.error('Error creating team:', error);
-  }
-};
-
-  // Редактирование команды
-  const handleEditTeam = async (teamId, updatedData) => {
+    e.preventDefault();
     try {
-      const response = await api.put(`/api/teams/${teamId}`, updatedData);
-      setTeams(teams.map((t) => (t.id === teamId ? response.data : t)));
-      setEditingTeam(null); // Закрываем форму редактирования
-      toast.success('Team updated successfully!');
+      const response = await api.post('/api/teams', newTeam);
+      setTeams([...teams, response.data]);
+      setNewTeam({ name: '', description: '' });
+      toast.success('Team created successfully!');
     } catch (error) {
-      toast.error('Failed to update team');
-      console.error('Error updating team:', error);
+      toast.error('Failed to create team');
     }
   };
 
-  // Удаление команды
+  const handleEditTeam = async (teamId, updatedData) => {
+    try {
+      const updatePayload = {
+        name: updatedData.name,
+        description: updatedData.description
+      };
+
+      const response = await api.put(`/api/teams/${teamId}`, updatePayload);
+
+      setTeams(teams.map((t) => {
+        if (t.id === teamId) {
+          return {
+            ...t,
+            name: response.data.name,
+            description: response.data.description
+          };
+        }
+        return t;
+      }));
+
+      setEditingTeam(null);
+      toast.success('Team updated successfully!');
+    } catch (error) {
+      toast.error('Failed to update team');
+    }
+  };
+
   const handleDeleteTeam = async (teamId) => {
     if (!window.confirm('Are you sure you want to delete this team?')) {
       return;
@@ -64,224 +90,256 @@ const Teams = () => {
       toast.success('Team deleted successfully!');
     } catch (error) {
       toast.error('Failed to delete team');
-      console.error('Error deleting team:', error);
     }
   };
 
-  // Добавление участника в команду
-  const handleAddMemberByEmail = async (teamId, email, role) => {
+  const handleAddMember = async (e) => {
+    e.preventDefault();
     try {
-      await api.post(`/api/teams/${teamId}/members`, { email, role });
+      await api.post(`/api/teams/${selectedTeam.id}/members`, newMember);
       toast.success('Member added successfully!');
-      fetchTeams(); // Обновляем список команд
+      fetchTeams();
+      setShowAddMemberModal(false);
+      setNewMember({ email: '', role: 'member' });
     } catch (error) {
       toast.error('Failed to add member');
-      console.error('Error adding member:', error);
     }
   };
 
-  // Изменение роли участника
   const handleUpdateMemberRole = async (teamId, userId, role) => {
-      try {
-          // Ensure you're sending an object with a 'role' property
-          await api.put(`/api/teams/${teamId}/members/${userId}`, { role });
-          toast.success('Member role updated successfully!');
-          fetchTeams(); // Обновляем список команд
-      } catch (error) {
-          toast.error('Failed to update member role');
-          console.error('Error updating member role:', error);
-      }
+    try {
+      await api.put(`/api/teams/${teamId}/members/${userId}`, { role });
+      toast.success('Member role updated successfully!');
+      fetchTeams();
+    } catch (error) {
+      toast.error('Failed to update member role');
+    }
   };
 
-  // Удаление участника из команды
   const handleRemoveMember = async (teamId, userId) => {
     try {
       await api.delete(`/api/teams/${teamId}/members/${userId}`);
       toast.success('Member removed successfully!');
-      fetchTeams(); // Обновляем список команд
+      fetchTeams();
     } catch (error) {
       toast.error('Failed to remove member');
-      console.error('Error removing member:', error);
     }
   };
 
-  return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Teams</h1>
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
+  if (loading) {
+    return (
+      <div className="d-flex justify-content-center align-items-center" style={{ height: '100vh' }}>
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Loading...</span>
         </div>
-      )}
-
-      {/* Форма создания команды */}
-      <form onSubmit={handleCreateTeam} className="mb-6">
-        <h2 className="text-xl font-semibold mb-3">Create New Team</h2>
-        <div className="space-y-3">
-          <input
-            type="text"
-            placeholder="Team Name"
-            value={newTeam.name}
-            onChange={(e) => setNewTeam({ ...newTeam, name: e.target.value })}
-            className="w-full p-2 border rounded"
-            required
-          />
-          <input
-            type="text"
-            placeholder="Description"
-            value={newTeam.description}
-            onChange={(e) => setNewTeam({ ...newTeam, description: e.target.value })}
-            className="w-full p-2 border rounded"
-          />
-          <button
-            type="submit"
-            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-          >
-            Create Team
-          </button>
-        </div>
-      </form>
-
-      {/* Список команд */}
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-        {teams.map((team) => (
-          <div key={team.id} className="border rounded p-4">
-            <h3 className="text-lg font-semibold">{team.name}</h3>
-            <p className="text-gray-600 mb-3">{team.description}</p>
-
-            {/* Форма добавления участника */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const email = e.target.email.value;
-                const role = e.target.role.value;
-                handleAddMemberByEmail(team.id, email, role);
-                e.target.reset(); // Очищаем форму
-              }}
-              className="mb-4"
-            >
-              <h4 className="text-sm font-semibold mb-2">Add Member by Email:</h4>
-              <div className="flex space-x-2">
-                <input
-                  type="email"
-                  name="email"
-                  placeholder="User Email"
-                  className="w-full p-2 border rounded"
-                  required
-                />
-                <select
-                  name="role"
-                  className="w-full p-2 border rounded"
-                  defaultValue="member"
-                >
-                  <option value="member">Member</option>
-                  <option value="admin">Admin</option>
-                </select>
-                <button
-                  type="submit"
-                  className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600"
-                >
-                  Add
-                </button>
-              </div>
-            </form>
-
-            <div>
-              <h4 className="text-sm font-semibold mb-2">Members:</h4>
-               {/* Список участников */}
-              <ul className="list-disc list-inside text-gray-700">
-                {team.members.map((member) => (
-                  <li key={member.user_id}>
-                    {member.user_name ? member.user_name : member.user_id}
-                    {/* Display member.user_name */}
-                    <select
-                      value={member.role}
-                      onChange={(e) => {
-                        handleUpdateMemberRole(team.id, member.user_id, e.target.value);
-                      }}
-                      className="ml-2 p-1 border rounded"
-                    >
-                      <option value="member">Member</option>
-                      <option value="admin">Admin</option>
-                    </select>
-
-                    <button
-                      onClick={() => handleRemoveMember(team.id, member.user_id)}
-                      className="ml-2 bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
-                    >
-                      Remove
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="flex space-x-2 mt-4">
-              <button
-                onClick={() => setEditingTeam(team)}
-                className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => handleDeleteTeam(team.id)}
-                className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
       </div>
+    );
+  }
 
-      {/* Форма редактирования команды */}
-      {editingTeam && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleEditTeam(editingTeam.id, editingTeam);
-          }}
-          className="mb-6"
-        >
-          <h2 className="text-xl font-semibold mb-3">Edit Team</h2>
-          <div className="space-y-3">
-            <input
-              type="text"
-              placeholder="Team Name"
-              value={editingTeam.name}
-              onChange={(e) =>
-                setEditingTeam({ ...editingTeam, name: e.target.value })
-              }
-              className="w-full p-2 border rounded"
-              required
-            />
-            <input
-              type="text"
-              placeholder="Description"
-              value={editingTeam.description}
-              onChange={(e) =>
-                setEditingTeam({ ...editingTeam, description: e.target.value })
-              }
-              className="w-full p-2 border rounded"
-            />
-            <div className="flex space-x-2">
-              <button
-                type="submit"
-                className="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600"
-              >
-                Save Changes
-              </button>
-              <button
-                onClick={() => setEditingTeam(null)}
-                className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </form>
-      )}
-    </div>
+  return (
+    <Container className="mt-5">
+      <Row className="justify-content-center">
+        <Col md={10}>
+          {error && (
+            <Alert variant="danger" className="text-center mb-4">
+              {error}
+            </Alert>
+          )}
+
+          {/* Create New Team Card */}
+          <Card className="shadow-sm mb-4">
+            <Card.Body>
+              <Card.Title>Create New Team</Card.Title>
+              <Form onSubmit={handleCreateTeam}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Team Name</Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={newTeam.name}
+                    onChange={(e) => setNewTeam({ ...newTeam, name: e.target.value })}
+                    required
+                  />
+                </Form.Group>
+                <Form.Group className="mb-3">
+                  <Form.Label>Description</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={3}
+                    value={newTeam.description}
+                    onChange={(e) => setNewTeam({ ...newTeam, description: e.target.value })}
+                  />
+                </Form.Group>
+                <Button variant="success" type="submit">
+                  Create Team
+                </Button>
+              </Form>
+            </Card.Body>
+          </Card>
+
+          {/* Teams List */}
+          <Row className="mb-4">
+            {teams.map((team) => (
+              <Col key={team.id} md={6} lg={4} className="mb-4">
+                <Card className="shadow-sm h-100">
+                  <Card.Body>
+                    <Card.Title>{team.name}</Card.Title>
+                    <Card.Text>{team.description}</Card.Text>
+
+                    <div className="mb-3">
+                      <small className="text-muted">Members ({team.members.length})</small>
+                      <ListGroup variant="flush" className="mt-2">
+                        {team.members.map((member) => (
+                          <ListGroup.Item key={member.user_name} className="d-flex justify-content-between align-items-center">
+                            <span>{member.user_name}</span>
+                            <div>
+                              <Form.Select
+                                size="sm"
+                                value={member.role}
+                                onChange={(e) => handleUpdateMemberRole(team.id, member.user_id, e.target.value)}
+                                className="d-inline-block me-2"
+                                style={{ width: 'auto' }}
+                              >
+                                <option value="member">Member</option>
+                                <option value="admin">Admin</option>
+                              </Form.Select>
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                onClick={() => handleRemoveMember(team.id, member.user_id)}
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          </ListGroup.Item>
+                        ))}
+                      </ListGroup>
+                    </div>
+
+                    <div className="d-flex justify-content-between mt-3">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedTeam(team);
+                          setShowAddMemberModal(true);
+                        }}
+                      >
+                        Add Member
+                      </Button>
+                      <div>
+                        <Button
+                          variant="warning"
+                          size="sm"
+                          className="me-2"
+                          onClick={() => setEditingTeam(team)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => handleDeleteTeam(team.id)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  </Card.Body>
+                </Card>
+              </Col>
+            ))}
+          </Row>
+
+          {/* Edit Team Modal */}
+          {editingTeam && (
+            <Modal show onHide={() => setEditingTeam(null)}>
+              <Modal.Header closeButton>
+                <Modal.Title>Edit Team</Modal.Title>
+              </Modal.Header>
+              <Modal.Body>
+                <Form onSubmit={(e) => {
+                  e.preventDefault();
+                  handleEditTeam(editingTeam.id, editingTeam);
+                }}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Team Name</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={editingTeam.name}
+                      onChange={(e) => setEditingTeam({ ...editingTeam, name: e.target.value })}
+                      required
+                    />
+                  </Form.Group>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Description</Form.Label>
+                    <Form.Control
+                      as="textarea"
+                      rows={3}
+                      value={editingTeam.description}
+                      onChange={(e) => setEditingTeam({ ...editingTeam, description: e.target.value })}
+                    />
+                  </Form.Group>
+                  <div className="d-flex justify-content-end">
+                    <Button
+                      variant="secondary"
+                      className="me-2"
+                      onClick={() => setEditingTeam(null)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button variant="primary" type="submit">
+                      Save Changes
+                    </Button>
+                  </div>
+                </Form>
+              </Modal.Body>
+            </Modal>
+          )}
+
+          {/* Add Member Modal */}
+          <Modal show={showAddMemberModal} onHide={() => setShowAddMemberModal(false)}>
+            <Modal.Header closeButton>
+              <Modal.Title>Add Team Member</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+              <Form onSubmit={handleAddMember}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Email</Form.Label>
+                  <Form.Control
+                    type="email"
+                    value={newMember.email}
+                    onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
+                    required
+                  />
+                </Form.Group>
+                <Form.Group className="mb-3">
+                  <Form.Label>Role</Form.Label>
+                  <Form.Select
+                    value={newMember.role}
+                    onChange={(e) => setNewMember({ ...newMember, role: e.target.value })}
+                  >
+                    <option value="member">Member</option>
+                    <option value="admin">Admin</option>
+                  </Form.Select>
+                </Form.Group>
+                <div className="d-flex justify-content-end">
+                  <Button
+                    variant="secondary"
+                    className="me-2"
+                    onClick={() => setShowAddMemberModal(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button variant="primary" type="submit">
+                    Add Member
+                  </Button>
+                </div>
+              </Form>
+            </Modal.Body>
+          </Modal>
+        </Col>
+      </Row>
+    </Container>
   );
 };
 

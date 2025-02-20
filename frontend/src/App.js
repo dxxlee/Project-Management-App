@@ -3,7 +3,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 // Импорты компонентов
 import Home from './components/Home';
-import ProjectDashboard from './components/ProjectDashboard';
+import Dashboard from './components/Dashboard';
 import Projects from './components/Projects';
 import Tasks from './components/Tasks';
 import Teams from './components/Teams';
@@ -52,7 +52,7 @@ const App = () => {
                   element={
                     user ? (
                       <PrivateRoute> {/* Защищаем Dashboard */}
-                        <ProjectDashboard />
+                        <Dashboard />
                       </PrivateRoute>
                     ) : (
                       <Navigate to="/login" /> // Редирект на логин, если не залогинен
@@ -65,6 +65,18 @@ const App = () => {
                     user ? (
                       <PrivateRoute>
                         <Projects />
+                      </PrivateRoute>
+                    ) : (
+                      <Navigate to="/login" />
+                    )
+                  }
+                />
+                <Route
+                  path="/projects/:projectId/tasks"
+                  element={
+                    user ? (
+                      <PrivateRoute>
+                        <Tasks />
                       </PrivateRoute>
                     ) : (
                       <Navigate to="/login" />
