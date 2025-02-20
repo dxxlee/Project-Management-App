@@ -1,4 +1,4 @@
-import requests
+import aiohttp
 from ..config import settings
 
 class AtlasApp:
@@ -10,8 +10,12 @@ class AtlasApp:
         }
 
     async def call_function(self, func_name: str, args: dict):
-        url = f"{self.base_url}/functions/{func_name}/call"
-        response = requests.post(url, json={"arguments": [args]}, headers=self.headers)
-        return response.json()
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{self.base_url}/functions/{func_name}/call",
+                json={"arguments": [args]},
+                headers=self.headers
+            ) as response:
+                return await response.json()
 
 atlas_app = AtlasApp()

@@ -2,6 +2,7 @@ from fastapi import WebSocket
 import asyncio
 import json
 from bson import json_util
+from ..config import settings
 
 class ChangeStreamManager:
     def __init__(self):
