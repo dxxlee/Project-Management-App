@@ -90,7 +90,7 @@ async def get_team_projects(team_id: str, current_user=Depends(get_current_user)
 @router.get("/", response_model=List[Team])
 async def get_teams(current_user=Depends(get_current_user)):
     """
-    Retrieves all teams where the user is a member.
+    Retrieves all teams where the user is a member, including member names.
     """
     db = get_database()
     teams_cursor = db["teams"].find({"members.user_id": str(current_user.id)})
@@ -100,4 +100,10 @@ async def get_teams(current_user=Depends(get_current_user)):
         team["id"] = str(team["_id"])
         del team["_id"]
 
+        # Fetch usernames for each member
+        for member in team["members"]:
+            user = await db["users"].find_one({"_id": ObjectId(member["user_id"])})
+            member["user_name"] = user["username"] if user else "Unknown User"
+
     return [Team(**team) for team in teams]
+
