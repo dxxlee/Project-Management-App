@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, FastAPI
+from fastapi import APIRouter, Depends, HTTPException, Query, FastAPI, Body
 from typing import List, Optional, Any
 from datetime import datetime
 from bson import ObjectId
+from pydantic import BaseModel, ValidationError
+
 
 from ..models.task import Task, TaskStatus, TaskPriority
 from ..utils.auth import get_current_user
@@ -229,32 +231,34 @@ async def update_task_with_permissions(
 # =========================================================
 #  УДАЛЕНИЕ ЗАДАЧИ
 # =========================================================
-@router.delete("/tasks/{task_id}")
-async def delete_task(task_id: str, current_user=Depends(get_current_user)):
+
+# Модель для удаления комментария
+# Модель для удаления комментария
+class CommentDeleteRequest(BaseModel):
+    comment_text: str
+
+@router.put("/tasks/{task_id}/comments/remove", response_model=Task)
+async def remove_comment_from_task(
+    task_id: str,
+    payload: CommentDeleteRequest,
+    current_user=Depends(get_current_user)
+):
     """
-    Удаление задачи. Настройте права при необходимости (ниже только владелец проекта).
+    Удаляет комментарий из массива comments задачи по значению поля "text".
+    Использует оператор $pull.
     """
+    comment_text = payload.comment_text
     db = get_database()
-    user_id = str(current_user.id)
-
-    # Ищем задачу
-    task_data = await db["tasks"].find_one({"_id": ObjectId(task_id)})
-    if not task_data:
-        raise HTTPException(status_code=404, detail="Task not found")
-
-    project_id = task_data["project_id"]
-    project = await db["projects"].find_one({"_id": ObjectId(project_id)})
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    # Проверяем, что только владелец проекта может удалять
-    if project.get("owner_id") != user_id:
-        raise HTTPException(status_code=403, detail="Only project owner can delete tasks")
-
-    result = await db["tasks"].delete_one({"_id": ObjectId(task_id)})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return {"status": "success", "message": "Task deleted successfully"}
+    result = await db["tasks"].update_one(
+        {"_id": ObjectId(task_id)},
+        {"$pull": {"comments": {"text": comment_text}}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Task not found or comment not removed")
+    updated_task = await db["tasks"].find_one({"_id": ObjectId(task_id)})
+    updated_task["id"] = str(updated_task["_id"])
+    del updated_task["_id"]
+    return Task(**updated_task)
 
 
 # =========================================================
@@ -431,6 +435,56 @@ async def assign_task(
 
     return {"status": "success", "message": "Task assigned successfully"}
 
+
+@router.put("/tasks/{task_id}/comments", response_model=Task)
+async def add_comment_to_task(
+    task_id: str,
+    comment: dict,  # Ожидается, что комментарий передается как JSON-объект, например: {"text": "Новый комментарий", "author": "username"}
+    current_user=Depends(get_current_user)
+):
+    """
+    Добавляет комментарий в массив comments задачи с id=task_id.
+    Использует оператор $push.
+    """
+    db = get_database()
+    # Добавляем поле created_at к комментарию
+    comment["created_at"] = datetime.utcnow()
+    result = await db["tasks"].update_one(
+        {"_id": ObjectId(task_id)},
+        {"$push": {"comments": comment}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Task not found or comment not added")
+    updated_task = await db["tasks"].find_one({"_id": ObjectId(task_id)})
+    updated_task["id"] = str(updated_task["_id"])
+    del updated_task["_id"]
+    return Task(**updated_task)
+
+
+# =========================================================
+#  УДАЛЕНИЕ КОММЕНТАРИЯ ИЗ ЗАДАЧИ (с использованием $pull)
+# =========================================================
+@router.put("/tasks/{task_id}/comments/remove", response_model=Task)
+async def remove_comment_from_task(
+    task_id: str,
+    comment_text: str = Body(...),
+    current_user=Depends(get_current_user)
+):
+    """
+    Удаляет комментарий из массива comments задачи по значению поля "text".
+    Использует оператор $pull.
+    """
+    db = get_database()
+    result = await db["tasks"].update_one(
+        {"_id": ObjectId(task_id)},
+        {"$pull": {"comments": {"text": comment_text}}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Task not found or comment not removed")
+    updated_task = await db["tasks"].find_one({"_id": ObjectId(task_id)})
+    updated_task["id"] = str(updated_task["_id"])
+    del updated_task["_id"]
+    return Task(**updated_task)
 
 # Aggregation Framework
 
