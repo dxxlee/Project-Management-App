@@ -63,6 +63,12 @@ const Tasks = () => {
   const [editingTask, setEditingTask] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
 
+  // Состояния для работы с комментариями
+  const [showAddCommentModal, setShowAddCommentModal] = useState(false);
+  const [showDeleteCommentModal, setShowDeleteCommentModal] = useState(false);
+  const [currentTaskForComment, setCurrentTaskForComment] = useState(null);
+  const [newCommentText, setNewCommentText] = useState("");
+
   useEffect(() => {
     fetchProjects();
     fetchUsers();
@@ -128,8 +134,8 @@ const Tasks = () => {
         due_date: newTask.due_date ? new Date(newTask.due_date).toISOString() : null,
         assignee_id: newTask.assignee_id || null
       };
-      await api.post(`/api/projects/${projectId}/tasks`, formattedTask);
-      await fetchTasks(projectId);
+      await api.post(`/api/projects/${selectedProject}/tasks`, formattedTask);
+      await fetchTasks(selectedProject);
       setNewTask({
         title: '',
         description: '',
@@ -165,13 +171,20 @@ const Tasks = () => {
     }
   };
 
-  // Функция для редактирования задачи: открывает модальное окно с предзаполненными данными
+  // Редактирование задачи
   const handleEditTask = (task) => {
     setEditingTask({ ...task });
     setShowEditModal(true);
   };
 
-  // Функция сохранения изменений редактирования
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    setEditingTask(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
   const handleSaveEditTask = async () => {
     try {
       const updateData = {
@@ -181,9 +194,7 @@ const Tasks = () => {
         due_date: editingTask.due_date ? new Date(editingTask.due_date).toISOString() : null,
         assignee_id: editingTask.assignee_id || null
       };
-  
       console.log("Sending update request:", updateData);
-  
       await api.put(`/api/tasks/${editingTask.id}`, updateData);
       await fetchTasks(selectedProject);
       setShowEditModal(false);
@@ -195,16 +206,42 @@ const Tasks = () => {
     }
   };
 
-  // Функция для обработки изменений в форме редактирования
-  const handleEditChange = (e) => {
-    const { name, value } = e.target;
-    setEditingTask(prev => ({
-      ...prev,
-      [name]: value
-    }));
+  // Комментарии: добавление
+  const handleAddComment = (task) => {
+    setCurrentTaskForComment(task);
+    setNewCommentText("");
+    setShowAddCommentModal(true);
   };
 
-  // Функция для агрегации полной сводки
+  const handleSaveComment = async () => {
+    try {
+      await api.put(`/api/tasks/${currentTaskForComment.id}/comments`, { text: newCommentText });
+      await fetchTasks(selectedProject);
+      setShowAddCommentModal(false);
+      setCurrentTaskForComment(null);
+      toast.success('Comment added successfully');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to add comment');
+    }
+  };
+
+  // Комментарии: удаление
+  const handleDeleteComment = (task) => {
+    setCurrentTaskForComment(task);
+    setShowDeleteCommentModal(true);
+  };
+
+  const handleConfirmDeleteComment = async (commentText) => {
+    try {
+      await api.put(`/api/tasks/${currentTaskForComment.id}/comments/remove`, { comment_text: commentText });
+      await fetchTasks(selectedProject);
+      toast.success('Comment deleted successfully');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete comment');
+    }
+  };
+
+  // Полная агрегация (если требуется)
   const fetchFullAggregation = async () => {
     setFullAggLoading(true);
     try {
@@ -254,7 +291,7 @@ const Tasks = () => {
               New Task
             </Button>
 
-            {/* Кнопка "полной" агрегации */}
+            {/* Кнопка для полной агрегации (если нужна) */}
             <Button
               variant="outline-dark"
               onClick={fetchFullAggregation}
@@ -400,7 +437,7 @@ const Tasks = () => {
                                                   Edit
                                                 </Dropdown.Item>
                                                 <Dropdown.Item onClick={() => {
-                                                  if(window.confirm("Are you sure you want to delete this task?")) {
+                                                  if (window.confirm("Are you sure you want to delete this task?")) {
                                                     api.delete(`/api/tasks/${task.id}`)
                                                       .then(() => {
                                                         fetchTasks(selectedProject);
@@ -411,17 +448,34 @@ const Tasks = () => {
                                                 }}>
                                                   Delete
                                                 </Dropdown.Item>
+                                                <Dropdown.Item onClick={() => handleAddComment(task)}>
+                                                  Add Comment
+                                                </Dropdown.Item>
+                                                <Dropdown.Item onClick={() => handleDeleteComment(task)}>
+                                                  Delete Comment
+                                                </Dropdown.Item>
                                               </Dropdown.Menu>
                                             </Dropdown>
                                           </div>
                                           <p className="small text-muted mb-2">{task.description}</p>
+                                          {/* Блок комментариев */}
+                                          {task.comments && task.comments.length > 0 && (
+                                            <div className="mt-2 p-2" style={{ backgroundColor: 'rgba(0, 123, 255, 0.1)', borderRadius: '5px' }}>
+                                              <h6 className="mb-1" style={{ fontSize: '0.85rem' }}>Comments:</h6>
+                                              {task.comments.map((comment, idx) => (
+                                                <Card key={idx} className="mb-1" style={{ backgroundColor: 'rgba(0, 123, 255, 0.05)' }}>
+                                                  <Card.Body className="py-1 px-2">
+                                                    <small>{comment.text}</small>
+                                                  </Card.Body>
+                                                </Card>
+                                              ))}
+                                            </div>
+                                          )}
                                           <Stack gap={2} direction="horizontal">
                                             {task.assignee_id && (
                                               <Badge bg="light" text="dark" className="d-flex align-items-center">
                                                 <PersonFill className="me-1" />
-                                                {
-                                                  (users.find(u => u.id === task.assignee_id) || {}).username || "Unassigned"
-                                                }
+                                                {(users.find(u => u.id === task.assignee_id) || {}).username || "Unassigned"}
                                               </Badge>
                                             )}
                                             {task.due_date && (
@@ -523,6 +577,87 @@ const Tasks = () => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowFullAggModal(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Модальное окно для добавления комментария */}
+      <Modal
+        show={showAddCommentModal}
+        onHide={() => setShowAddCommentModal(false)}
+        size="md"
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Add Comment</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form.Group>
+            <Form.Label>Comment Text</Form.Label>
+            <Form.Control
+              type="text"
+              value={newCommentText}
+              onChange={e => setNewCommentText(e.target.value)}
+            />
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowAddCommentModal(false)}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={handleSaveComment}>
+            Save Comment
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Модальное окно для удаления комментариев */}
+      <Modal
+        show={showDeleteCommentModal}
+        onHide={() => setShowDeleteCommentModal(false)}
+        size="md"
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Delete Comment</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {currentTaskForComment && currentTaskForComment.comments && currentTaskForComment.comments.length > 0 ? (
+            <Table striped bordered hover size="sm">
+              <thead>
+                <tr>
+                  <th>Comment</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentTaskForComment.comments.map((comment, idx) => (
+                  <tr key={idx}>
+                    <td>{comment.text}</td>
+                    <td>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => {
+                          if (window.confirm("Are you sure you want to delete this comment?")) {
+                            handleConfirmDeleteComment(comment.text);
+                          }
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          ) : (
+            <p>No comments available.</p>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowDeleteCommentModal(false)}>
             Close
           </Button>
         </Modal.Footer>
