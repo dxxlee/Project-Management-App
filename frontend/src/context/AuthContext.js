@@ -13,20 +13,18 @@ export const AuthProvider = ({ children }) => {
 
     if (token) {
       try {
-        const decoded = jwtDecode(token); // Декодируем токен
-        const currentTime = Date.now() / 1000; // Текущее время в секундах
+        const decoded = jwtDecode(token); // Decode the token
+        const currentTime = Date.now() / 1000;
 
         if (decoded.exp && decoded.exp < currentTime) {
-          console.log('Token expired');
-          localStorage.removeItem('token');
+          localStorage.removeItem('token'); // Remove expired token
           setUser(null);
         } else {
           setUser(decoded);
-          setAuthToken(token); // Устанавливаем токен в API клиенте
+          setAuthToken(token); // Set token in API client
         }
       } catch (error) {
-        console.error('Invalid token:', error);
-        localStorage.removeItem('token');
+        localStorage.removeItem('token'); // Remove invalid token
       }
     }
 
@@ -37,13 +35,13 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('token', token);
     const decoded = jwtDecode(token);
     setUser(decoded);
-    setAuthToken(token); // Устанавливаем токен в API клиенте
+    setAuthToken(token); // Set token in API client
   };
 
   const logout = () => {
     localStorage.removeItem('token');
     setUser(null);
-    setAuthToken(null); // Очищаем токен в API клиенте
+    setAuthToken(null); // Clear token in API client
   };
 
   return (

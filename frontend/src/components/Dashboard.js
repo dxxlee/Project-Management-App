@@ -4,6 +4,7 @@ import { Container, Card, Row, Col, Spinner, Alert, Button } from 'react-bootstr
 import { FaUser, FaEnvelope, FaSignOutAlt } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+
 const Dashboard = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -64,22 +65,18 @@ const Dashboard = () => {
           <Card className="shadow-sm">
             <Card.Body>
               <Card.Title className="text-center mb-4">
-                <FaUser size={32} className="mb-2" /> {/* Иконка пользователя */}
+                <FaUser size={32} className="mb-2" /> {/* User icon */}
                 <br />
                 Welcome, {user.username}!
               </Card.Title>
-
               <Card.Text>
                 <div className="d-flex align-items-center justify-content-center mb-3">
-                  {/* Иконка email */}
-                  <FaEnvelope size={20} className="me-2" />
-                  {/* Email */}
+                  <FaEnvelope size={20} className="me-2" /> {/* Email icon */}
                   <span>
                     <strong>Email:</strong> {user.email}
                   </span>
                 </div>
               </Card.Text>
-
               <div className="text-center">
                 <Button variant="outline-danger" onClick={handleLogout}>
                   <FaSignOutAlt /> Logout

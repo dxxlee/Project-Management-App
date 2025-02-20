@@ -24,6 +24,7 @@ const Projects = () => {
   const [filter, setFilter] = useState('all'); // 'all', 'my', 'team'
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Fetch all projects
   const fetchProjects = async () => {
     setLoading(true);
     try {
@@ -38,6 +39,7 @@ const Projects = () => {
     }
   };
 
+  // Fetch all teams
   const fetchTeams = async () => {
     try {
       const response = await api.get('/api/teams');
@@ -52,6 +54,7 @@ const Projects = () => {
     fetchTeams();
   }, []);
 
+  // Create a new project
   const handleCreateProject = async (e) => {
     e.preventDefault();
     try {
@@ -69,6 +72,7 @@ const Projects = () => {
     }
   };
 
+  // Update an existing project
   const handleEditProject = async (projectId, updatedData) => {
     try {
       const response = await api.put(`/api/projects/${projectId}`, updatedData);
@@ -80,6 +84,7 @@ const Projects = () => {
     }
   };
 
+  // Delete a project
   const handleDeleteProject = async (projectId) => {
     if (!window.confirm('Are you sure you want to delete this project?')) {
       return;
@@ -93,6 +98,7 @@ const Projects = () => {
     }
   };
 
+  // Filter projects based on filter type and search query
   const filteredProjects = projects
     .filter(project => {
       if (filter === 'my') return project.owner_id === localStorage.getItem('userId');
@@ -116,7 +122,7 @@ const Projects = () => {
     <Container className="mt-5">
       <Row className="justify-content-center">
         <Col md={10}>
-          {/* Фильтр и поиск */}
+          {/* Filter and search */}
           <Row className="mb-4">
             <Col md={6}>
               <Form.Control
@@ -140,14 +146,14 @@ const Projects = () => {
             </Col>
           </Row>
 
-          {/* Ошибка загрузки */}
+          {/* Error message */}
           {error && (
             <Alert variant="danger" className="text-center">
               {error}
             </Alert>
           )}
 
-          {/* Список проектов */}
+          {/* List of projects */}
           <Row className="mb-4">
             {filteredProjects.map((project) => (
               <Col key={project.id} md={6} lg={4} className="mb-4">
@@ -189,7 +195,7 @@ const Projects = () => {
             ))}
           </Row>
 
-          {/* Создание нового проекта */}
+          {/* Create new project form */}
           <Card className="shadow-sm mb-4">
             <Card.Body>
               <Card.Title>Create New Project</Card.Title>
@@ -235,7 +241,7 @@ const Projects = () => {
             </Card.Body>
           </Card>
 
-          {/* Модальное окно для редактирования */}
+          {/* Edit project modal */}
           {editingProject && (
             <Modal show onHide={() => setEditingProject(null)}>
               <Modal.Header closeButton>

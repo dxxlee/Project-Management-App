@@ -14,10 +14,12 @@ const Login = () => {
   const navigate = useNavigate();
   const { login } = React.useContext(AuthContext);
 
+  // Handle input change
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -30,10 +32,10 @@ const Login = () => {
           },
         }
       );
-      setError(null); // Очищаем ошибки
+      setError(null);
       alert('Login successful!');
-      login(response.data.access_token); // Сохраняем токен через контекст
-      navigate('/dashboard'); // Перенаправляем на Dashboard
+      login(response.data.access_token);
+      navigate('/dashboard');
     } catch (error) {
       console.error('Login error:', error.response?.data || error.message);
       setError('Login failed. Please check your credentials.');
@@ -76,7 +78,6 @@ const Login = () => {
             </Button>
           </Form>
 
-          {/* Ссылка на регистрацию */}
           <div className="text-center mt-3">
             Don't have an account?{' '}
             <Link to="/register" style={{ textDecoration: 'none' }}>

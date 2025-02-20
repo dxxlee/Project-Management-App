@@ -11,15 +11,17 @@ const Register = () => {
   });
   const [error, setError] = useState(null);
 
+  // Handle input change
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       const response = await api.post('/api/auth/register', formData);
-      setError(null); // Очищаем ошибки
+      setError(null);
       alert('Registration successful!');
       console.log(response.data);
     } catch (error) {
@@ -76,7 +78,7 @@ const Register = () => {
             </Button>
           </Form>
 
-          {/* Ссылка на логин */}
+          {/* Link to login page */}
           <div className="text-center mt-3">
             Already have an account?{' '}
             <Link to="/login" style={{ textDecoration: 'none' }}>

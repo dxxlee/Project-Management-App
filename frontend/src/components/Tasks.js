@@ -54,16 +54,16 @@ const Tasks = () => {
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
-  // Состояния для "полной" агрегации (full_summary)
+  // States for "full" aggregation (full_summary)
   const [fullAggregation, setFullAggregation] = useState({});
   const [showFullAggModal, setShowFullAggModal] = useState(false);
   const [fullAggLoading, setFullAggLoading] = useState(false);
 
-  // Состояния для редактирования задачи
+  // States for editing a task
   const [editingTask, setEditingTask] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
 
-  // Состояния для работы с комментариями
+  // States for working with comments
   const [showAddCommentModal, setShowAddCommentModal] = useState(false);
   const [showDeleteCommentModal, setShowDeleteCommentModal] = useState(false);
   const [currentTaskForComment, setCurrentTaskForComment] = useState(null);
@@ -126,6 +126,7 @@ const Tasks = () => {
     }
   };
 
+  // Create a new task
   const handleCreateTask = async (e) => {
     e.preventDefault();
     try {
@@ -150,6 +151,7 @@ const Tasks = () => {
     }
   };
 
+  // Update a task
   const handleUpdateTaskStatus = async (taskId, newStatus) => {
     try {
       await api.put(`/api/tasks/${taskId}/status?status=${newStatus}`);
@@ -171,7 +173,7 @@ const Tasks = () => {
     }
   };
 
-  // Редактирование задачи
+  // Edit task
   const handleEditTask = (task) => {
     setEditingTask({ ...task });
     setShowEditModal(true);
@@ -206,13 +208,14 @@ const Tasks = () => {
     }
   };
 
-  // Комментарии: добавление
+  // Add comment
   const handleAddComment = (task) => {
     setCurrentTaskForComment(task);
     setNewCommentText("");
     setShowAddCommentModal(true);
   };
 
+  // Save comment
   const handleSaveComment = async () => {
     try {
       await api.put(`/api/tasks/${currentTaskForComment.id}/comments`, { text: newCommentText });
@@ -225,7 +228,7 @@ const Tasks = () => {
     }
   };
 
-  // Комментарии: удаление
+  // Delete comment
   const handleDeleteComment = (task) => {
     setCurrentTaskForComment(task);
     setShowDeleteCommentModal(true);
@@ -241,7 +244,7 @@ const Tasks = () => {
     }
   };
 
-  // Полная агрегация (если требуется)
+  // Full aggregation
   const fetchFullAggregation = async () => {
     setFullAggLoading(true);
     try {
@@ -291,7 +294,7 @@ const Tasks = () => {
               New Task
             </Button>
 
-            {/* Кнопка для полной агрегации (если нужна) */}
+            {/* Button for full aggregation */}
             <Button
               variant="outline-dark"
               onClick={fetchFullAggregation}
@@ -512,7 +515,7 @@ const Tasks = () => {
         </div>
       ) : null}
 
-      {/* Модальное окно для отображения "полной" агрегации */}
+      {/* Modal for aggregation */}
       <Modal
         show={showFullAggModal}
         onHide={() => setShowFullAggModal(false)}
@@ -582,7 +585,7 @@ const Tasks = () => {
         </Modal.Footer>
       </Modal>
 
-      {/* Модальное окно для добавления комментария */}
+      {/* Modal for adding a comment */}
       <Modal
         show={showAddCommentModal}
         onHide={() => setShowAddCommentModal(false)}
@@ -612,7 +615,7 @@ const Tasks = () => {
         </Modal.Footer>
       </Modal>
 
-      {/* Модальное окно для удаления комментариев */}
+      {/* Modal for deleting a task */}
       <Modal
         show={showDeleteCommentModal}
         onHide={() => setShowDeleteCommentModal(false)}
@@ -663,7 +666,7 @@ const Tasks = () => {
         </Modal.Footer>
       </Modal>
 
-      {/* Модальное окно для редактирования задачи */}
+      {/* Modal for editing a task */}
       <Modal
         show={showEditModal}
         onHide={() => setShowEditModal(false)}
