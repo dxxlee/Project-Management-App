@@ -7,7 +7,7 @@ const StyledFooter = styled.footer`
   box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.1);
   background-color: #fff !important;
   padding: 16px 0;
-  margin-top: auto; // Ensures it sticks to the bottom of the page if needed
+  margin-top: auto; 
   text-align: center;
 
   .footer-content {
