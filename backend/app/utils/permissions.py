@@ -9,7 +9,6 @@ async def check_project_permissions(project_id: str, user_id: str, required_role
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    # Проверяем права в команде, если проект привязан к команде
     if project.get("team_id"):
         team = await db["teams"].find_one({"_id": ObjectId(project["team_id"])})
         if team:
@@ -20,11 +19,9 @@ async def check_project_permissions(project_id: str, user_id: str, required_role
                     elif not required_roles:
                         return True
     
-    # Если проект не привязан к команде, проверяем является ли пользователь владельцем
     if project.get("owner_id") == user_id:
         return True
         
-    # Проверяем является ли пользователь участником проекта
     if user_id in project.get("members", []):
         return True
         
@@ -53,7 +50,6 @@ async def check_task_permissions(task_id: str, user_id: str, required_roles=None
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    # Проверяем права на уровне проекта
     await check_project_permissions(task["project_id"], user_id, required_roles)
     
     return task

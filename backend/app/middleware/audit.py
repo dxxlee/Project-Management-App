@@ -6,7 +6,7 @@ import json
 
 class AuditMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # Сохраняем информацию о запросе
+        # Saving information about request
         request.state.ip_address = request.client.host
         request.state.user_agent = request.headers.get("user-agent")
 

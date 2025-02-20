@@ -11,7 +11,7 @@ class TeamRole(str, Enum):
 
 class TeamMember(BaseModel):
     user_id: str
-    role: TeamRole = TeamRole.MEMBER  # Default role is MEMBER
+    role: TeamRole = TeamRole.MEMBER
     user_name: Optional[str] = None
 
 class Team(BaseModel):
@@ -28,7 +28,7 @@ class TeamUpdate(BaseModel):
 
 class AddMemberByEmail(BaseModel):
     email: EmailStr
-    role: TeamRole = TeamRole.MEMBER  # Default role is MEMBER
+    role: TeamRole = TeamRole.MEMBER 
 
-class UpdateMemberRole(BaseModel):  # Add this model
-    role: TeamRole  # The role to update
+class UpdateMemberRole(BaseModel): 
+    role: TeamRole

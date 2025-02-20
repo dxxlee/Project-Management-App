@@ -22,13 +22,11 @@ async def get_team_name(team_id: str) -> str:
 async def create_project(project: ProjectCreate, current_user=Depends(get_current_user)):
     project_dict = project.model_dump()
 
-    # Если указан team_id — проверяем привилегии в команде
     if project_dict.get("team_id"):
         db = get_database()
         team = await db["teams"].find_one({"_id": ObjectId(project_dict["team_id"])})
         if not team:
             raise HTTPException(status_code=404, detail="Team not found")
-        # Проверяем, что текущий пользователь - владелец или админ команды
         allowed_roles = ["owner", "admin"]
         user_roles = [member["role"] for member in team["members"] if member["user_id"] == str(current_user.id)]
         if not any(role in allowed_roles for role in user_roles):
@@ -107,21 +105,20 @@ async def get_user_projects(current_user=Depends(get_current_user)):
     try:
         db = get_database()
         projects_cursor = db["projects"].find({"members": str(current_user.id)})
-        projects = await projects_cursor.to_list(length=None)  # Преобразуем курсор в список
-        print("Raw Projects Data:", projects)  # Логируем сырые данные из базы данных
+        projects = await projects_cursor.to_list(length=None)  
+        print("Raw Projects Data:", projects) 
 
-        # Преобразуем ObjectId в строку и добавляем поле id
         transformed_projects = []
         for project in projects:
             project["id"] = str(project["_id"])
-            del project["_id"]  # Удаляем поле _id
+            del project["_id"] 
 
             # Add team name to the project
             team_id = project.get("team_id")
             if team_id:
                 project["team_name"] = await get_team_name(team_id)
             else:
-                project["team_name"] = "No Team"  # Default value if no team
+                project["team_name"] = "No Team"
 
             transformed_projects.append(Project(**project))
 
@@ -134,7 +131,6 @@ async def get_user_projects(current_user=Depends(get_current_user)):
 @router.post("/{project_id}/members/{user_id}")
 async def add_project_member(project_id: str, user_id: str, current_user=Depends(get_current_user)):
     """Добавление участника в проект"""
-    # Проверяем права доступа
     project = await db.client.projects.find_one({"_id": ObjectId(project_id)})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -142,7 +138,6 @@ async def add_project_member(project_id: str, user_id: str, current_user=Depends
     if str(current_user.id) != project.get("owner_id"):
         raise HTTPException(status_code=403, detail="Only project owner can add members")
 
-    # Проверяем существование пользователя
     user = await db.client.users.find_one({"_id": ObjectId(user_id)})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

@@ -22,7 +22,6 @@ class Database:
     client: AsyncIOMotorClient = None
 
     async def connect(self):
-        # Регистрируем слушатель команд (логирование)
         monitoring.register(CommandLogger())
 
         self.client = AsyncIOMotorClient(
@@ -31,7 +30,6 @@ class Database:
             minPoolSize=settings.MIN_CONNECTIONS_COUNT,
         )
         try:
-            # Проверяем соединение
             await self.client.admin.command("ping")
             logger.info("Successfully connected to MongoDB!")
         except Exception as e:
@@ -43,7 +41,6 @@ class Database:
             self.client.close()
             logger.info("MongoDB connection closed")
 
-# Создаём экземпляр класса Database
 db = Database()
 
 def get_database():

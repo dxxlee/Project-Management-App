@@ -37,7 +37,7 @@ router = APIRouter()
 async def project_websocket(websocket: WebSocket, project_id: str):
     await manager.connect(websocket, project_id)
     try:
-        # Настраиваем Change Stream для коллекции tasks
+        # Set up Change Stream for collection tasks
         pipeline = [{'$match': {'fullDocument.project_id': project_id}}]
         async with db.client[settings.DATABASE_NAME].tasks.watch(pipeline) as change_stream:
             async for change in change_stream:

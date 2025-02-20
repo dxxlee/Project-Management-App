@@ -18,8 +18,8 @@ async def log_action(
         "resource_id": resource_id,
         "details": details or {},
         "timestamp": datetime.now(timezone.utc),
-        "ip_address": None,  # Можно добавить через middleware
-        "user_agent": None  # Можно добавить через middleware
+        "ip_address": None,
+        "user_agent": None 
     }
 
     await db.client.audit_logs.insert_one(audit_entry)

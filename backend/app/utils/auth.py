@@ -39,7 +39,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 
     db = get_database()
     try:
-        # Преобразуем user_id в ObjectId для поиска в базе данных
         user = await db.users.find_one({"_id": ObjectId(user_id)})
     except Exception as e:
         print("Error converting user_id to ObjectId:", str(e))
@@ -49,7 +48,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         print("User Not Found in Database:", user_id)
         raise credentials_exception
 
-    # Преобразуем _id в строку и добавляем поле id
     user["id"] = str(user["_id"])
     del user["_id"]
 

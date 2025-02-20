@@ -24,9 +24,6 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# =========================================================
-#  ФУНКЦИЯ ПРОВЕРКИ ПРАВ ПОЛЬЗОВАТЕЛЯ В ПРОЕКТЕ/КОМАНДЕ
-# =========================================================
 async def check_project_permissions(project_id: str, user_id: str, required_roles=None):
     """
     Проверка прав пользователя user_id в проекте project_id.
@@ -38,25 +35,20 @@ async def check_project_permissions(project_id: str, user_id: str, required_role
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Если проект привязан к команде, проверяем роль пользователя в команде
     team_id = project.get("team_id")
     if team_id:
         team = await db["teams"].find_one({"_id": ObjectId(team_id)})
         if team:
             for member in team["members"]:
                 if member["user_id"] == user_id:
-                    # Если требуются конкретные роли:
                     if required_roles:
                         if member["role"] in required_roles:
                             return True
                         else:
                             raise HTTPException(status_code=403, detail="You don't have permission for this action")
                     else:
-                        # Если роль не требуется, достаточно быть в команде
                         return True
 
-    # Если нет команды или пользователь не найден в ней, проверяем сам проект
-    # (владелец проекта или хотя бы член проекта)
     if project.get("owner_id") == user_id:
         return True
     if user_id in project.get("members", []):
@@ -64,10 +56,6 @@ async def check_project_permissions(project_id: str, user_id: str, required_role
 
     raise HTTPException(status_code=403, detail="You don't have permission for this action")
 
-
-# =========================================================
-#  СОЗДАНИЕ ЗАДАЧИ
-# =========================================================
 @router.post("/projects/{project_id}/tasks", response_model=Task)
 async def create_task(
     project_id: str,
@@ -80,13 +68,11 @@ async def create_task(
     db = get_database()
 
     try:
-        # Проверяем, что пользователь хотя бы участник проекта
         await check_project_permissions(project_id, str(current_user.id))
 
         if not task.title:
             raise HTTPException(status_code=422, detail="Task title is required")
 
-        # Формируем словарь для вставки в базу
         task_dict = task.model_dump(exclude_unset=True)
         task_dict.update({
             "project_id": project_id,
@@ -107,10 +93,6 @@ async def create_task(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# =========================================================
-#  ПОЛУЧЕНИЕ ЗАДАЧ ПРОЕКТА
-# =========================================================
 @router.get("/projects/{project_id}/tasks", response_model=List[Task])
 async def get_project_tasks(
     project_id: str,
@@ -122,23 +104,17 @@ async def get_project_tasks(
     Возвращает задачи проекта project_id (с пагинацией).
     """
     db = get_database()
-    # Проверяем, что пользователь хотя бы участник
     await check_project_permissions(project_id, str(current_user.id))
 
     tasks_cursor = db["tasks"].find({"project_id": project_id}).skip(skip).limit(limit)
     tasks_list = await tasks_cursor.to_list(None)
 
-    # Преобразуем _id -> id
     for t in tasks_list:
         t["id"] = str(t["_id"])
         del t["_id"]
 
     return [Task(**t) for t in tasks_list]
 
-
-# =========================================================
-#  ПОЛУЧЕНИЕ ОДНОЙ ЗАДАЧИ
-# =========================================================
 @router.get("/tasks/{task_id}", response_model=Task)
 async def get_task(task_id: str, current_user=Depends(get_current_user)):
     """
@@ -149,7 +125,6 @@ async def get_task(task_id: str, current_user=Depends(get_current_user)):
     if not task_data:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    # Проверяем, что пользователь хотя бы участник проекта
     await check_project_permissions(task_data["project_id"], str(current_user.id))
 
     task_data["id"] = str(task_data["_id"])
@@ -169,7 +144,6 @@ async def update_task_with_permissions(
     db = get_database()
     user_id = str(current_user.id)
 
-    # Находим существующую задачу
     existing_task = await db["tasks"].find_one({"_id": ObjectId(task_id)})
     if not existing_task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -179,7 +153,6 @@ async def update_task_with_permissions(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Проверяем, имеет ли пользователь роль owner/admin (через команду или напрямую)
     is_admin = False
     team_id = project.get("team_id")
     if team_id:
@@ -193,11 +166,9 @@ async def update_task_with_permissions(
         if project.get("owner_id") == user_id:
             is_admin = True
 
-    # Получаем только изменённые поля
     update_data = task_update.dict(exclude_unset=True)
-    print("Received update data:", update_data)  # Отладочный вывод
+    print("Received update data:", update_data)
 
-    # Если пользователь не админ, разрешаем изменять только статус, если задача назначена на него
     if not is_admin:
         if existing_task.get("assignee_id") != user_id:
             raise HTTPException(
@@ -211,29 +182,19 @@ async def update_task_with_permissions(
                 detail="You can only update task status"
             )
 
-    # Добавляем время обновления
     update_data["updated_at"] = datetime.utcnow()
 
-    # Выполняем обновление
     await db["tasks"].update_one(
         {"_id": ObjectId(task_id)},
         {"$set": update_data}
     )
 
-    # Считываем обновлённый документ, преобразовывая _id в строку
     updated = await db["tasks"].find_one({"_id": ObjectId(task_id)})
     updated["id"] = str(updated["_id"])
     del updated["_id"]
 
     return Task(**updated)
 
-
-# =========================================================
-#  УДАЛЕНИЕ ЗАДАЧИ
-# =========================================================
-
-# Модель для удаления комментария
-# Модель для удаления комментария
 class CommentDeleteRequest(BaseModel):
     comment_text: str
 
@@ -259,18 +220,10 @@ async def remove_comment_from_task(
     updated_task["id"] = str(updated_task["_id"])
     del updated_task["_id"]
     return Task(**updated_task)
-
-
-# =========================================================
-#  ОБНОВЛЕНИЕ СТАТУСА ЗАДАЧИ
-# =========================================================
-
-
     
 @router.put("/tasks/{task_id}/status")
 async def update_task_status(
     task_id: str,
-    # status: TaskStatus,
     status: TaskStatus = Query(...),
     current_user=Depends(get_current_user)
 ):
@@ -279,15 +232,12 @@ async def update_task_status(
     """
     
     db = get_database()
-    # Ищем задачу
     task_data = await db["tasks"].find_one({"_id": ObjectId(task_id)})
     if not task_data:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    # Проверяем, что пользователь хотя бы участник
     await check_project_permissions(task_data["project_id"], str(current_user.id))
 
-    # Обновляем статус
     result = await db["tasks"].update_one(
         {"_id": ObjectId(task_id)},
         {
@@ -301,10 +251,6 @@ async def update_task_status(
         raise HTTPException(status_code=404, detail="Task not found")
     return {"status": "success", "message": "Task status updated"}
 
-
-# =========================================================
-#  ВСЕ ЗАДАЧИ ПОЛЬЗОВАТЕЛЯ
-# =========================================================
 @router.get("/user/tasks", response_model=List[Task])
 async def get_user_tasks(current_user=Depends(get_current_user)):
     """
@@ -313,12 +259,10 @@ async def get_user_tasks(current_user=Depends(get_current_user)):
     db = get_database()
     user_id = str(current_user.id)
 
-    # Находим все проекты, где user_id в members
     projects_cursor = db["projects"].find({"members": user_id})
     projects_list = await projects_cursor.to_list(None)
     project_ids = [str(p["_id"]) for p in projects_list]
 
-    # Ищем задачи, либо где project_id в project_ids, либо assignee_id == user_id
     tasks_cursor = db["tasks"].find({
         "$or": [
             {"project_id": {"$in": project_ids}},
@@ -333,10 +277,6 @@ async def get_user_tasks(current_user=Depends(get_current_user)):
 
     return [Task(**t) for t in tasks_list]
 
-
-# =========================================================
-#  МАССОВОЕ СОЗДАНИЕ ЗАДАЧ (для членов проекта)
-# =========================================================
 @router.post("/projects/{project_id}/tasks/bulk", response_model=List[Task])
 async def create_tasks_for_members(
     project_id: str,
@@ -352,18 +292,15 @@ async def create_tasks_for_members(
     db = get_database()
     user_id = str(current_user.id)
 
-    # Проверяем права (owner/admin)
     await check_project_permissions(project_id, user_id, required_roles=["owner", "admin"])
 
     project = await db["projects"].find_one({"_id": ObjectId(project_id)})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Определяем, кому назначаем
     if assign_to_all:
         assignees = project.get("members", [])
     elif member_ids:
-        # Проверяем, что все member_ids - участники проекта
         for m in member_ids:
             if m not in project.get("members", []):
                 raise HTTPException(
@@ -389,10 +326,6 @@ async def create_tasks_for_members(
 
     return created_tasks
 
-
-# =========================================================
-#  НАЗНАЧЕНИЕ ЗАДАЧИ ПОЛЬЗОВАТЕЛЮ
-# =========================================================
 @router.put("/tasks/{task_id}/assign")
 async def assign_task(
     task_id: str,
@@ -406,21 +339,17 @@ async def assign_task(
     db = get_database()
     user_id = str(current_user.id)
 
-    # Ищем задачу
     task_data = await db["tasks"].find_one({"_id": ObjectId(task_id)})
     if not task_data:
         raise HTTPException(status_code=404, detail="Task not found")
 
     project_id = task_data["project_id"]
-    # Проверяем, что текущий пользователь - owner/admin
     await check_project_permissions(project_id, user_id, required_roles=["owner", "admin"])
 
-    # Проверяем, что assignee_id существует
     user_to_assign = await db["users"].find_one({"_id": ObjectId(assignee_id)})
     if not user_to_assign:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Обновляем
     result = await db["tasks"].update_one(
         {"_id": ObjectId(task_id)},
         {
@@ -439,7 +368,7 @@ async def assign_task(
 @router.put("/tasks/{task_id}/comments", response_model=Task)
 async def add_comment_to_task(
     task_id: str,
-    comment: dict,  # Ожидается, что комментарий передается как JSON-объект, например: {"text": "Новый комментарий", "author": "username"}
+    comment: dict,
     current_user=Depends(get_current_user)
 ):
     """
@@ -447,7 +376,6 @@ async def add_comment_to_task(
     Использует оператор $push.
     """
     db = get_database()
-    # Добавляем поле created_at к комментарию
     comment["created_at"] = datetime.utcnow()
     result = await db["tasks"].update_one(
         {"_id": ObjectId(task_id)},
@@ -460,10 +388,6 @@ async def add_comment_to_task(
     del updated_task["_id"]
     return Task(**updated_task)
 
-
-# =========================================================
-#  УДАЛЕНИЕ КОММЕНТАРИЯ ИЗ ЗАДАЧИ (с использованием $pull)
-# =========================================================
 @router.put("/tasks/{task_id}/comments/remove", response_model=Task)
 async def remove_comment_from_task(
     task_id: str,
@@ -485,8 +409,6 @@ async def remove_comment_from_task(
     updated_task["id"] = str(updated_task["_id"])
     del updated_task["_id"]
     return Task(**updated_task)
-
-# Aggregation Framework
 
 def convert_objectids(obj):
     """
@@ -571,15 +493,12 @@ async def full_aggregation_summary(
     })
 
     try:
-        # Выполняем пайплайн
         await db["tasks"].aggregate(pipeline).to_list(length=None)
 
-        # Считываем последний документ из full_summary
         docs = await db["full_summary"].find({}).sort("_id", -1).limit(1).to_list(None)
         if not docs:
             return {}
 
-        # Преобразуем все ObjectId -> str
         doc_converted = convert_objectids(docs[0])
         return doc_converted
 

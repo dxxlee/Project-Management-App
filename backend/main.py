@@ -14,9 +14,8 @@ from app.sharding import configure_sharding
 
 app = FastAPI(title="Project Management API")
 
-# Настройка CORS
 origins = [
-    "http://localhost:3000",  # React-приложение
+    "http://localhost:3000",
 ]
 
 app.add_middleware(
@@ -27,7 +26,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Подключаем middleware
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(AuditMiddleware)
 
@@ -36,12 +34,9 @@ async def startup():
     await db.connect()
     await init_schema_validation()
     await create_indexes()
-    # await configure_sharding() 
     
-    # Получаем базу данных
     db_instance = db.client.get_database()
 
-    # Создаем индексы для аудита
     await db_instance.audit_logs.create_index([("timestamp", -1)])
     await db_instance.audit_logs.create_index([("user_id", 1)])
     await db_instance.audit_logs.create_index([("resource_type", 1), ("resource_id", 1)])
@@ -57,7 +52,6 @@ async def shutdown():
     await db.close()
 
 
-# Подключаем роуты
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(tasks.router, prefix="/api", tags=["tasks"])

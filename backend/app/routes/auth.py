@@ -18,7 +18,7 @@ router = APIRouter()
 async def register_user(user_data: UserCreate):
     db = get_database()
 
-    # Проверяем, существует ли пользователь
+    # Checking if user exists
     existing_user = await db.users.find_one({"email": user_data.email})
     if existing_user:
         raise HTTPException(
@@ -26,7 +26,7 @@ async def register_user(user_data: UserCreate):
             detail="User with this email already exists"
         )
 
-    # Создаем нового пользователя
+    # Create new user
     user_dict = user_data.dict()
     user_dict["hashed_password"] = get_password_hash(user_dict.pop("password"))
     

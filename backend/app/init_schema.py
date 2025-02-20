@@ -7,9 +7,6 @@ from .database import get_database
 async def init_schema_validation():
     db = get_database()
 
-    # -----------------------------------------------
-    # Коллекция "projects" с валидацией и продвинутыми BSON типами
-    # -----------------------------------------------
     project_schema = {
         "$jsonSchema": {
             "bsonType": "object",
@@ -69,15 +66,11 @@ async def init_schema_validation():
             "validationLevel": "moderate"
         })
     except OperationFailure as e:
-        # Если коллекция не существует, создаём её с валидатором
         try:
             await db.create_collection("projects", validator=project_schema)
         except Exception as create_exc:
             print("Error creating 'projects' collection:", create_exc)
 
-    # -----------------------------------------------
-    # Коллекция "tasks"
-    # -----------------------------------------------
     task_schema = {
         "$jsonSchema": {
             "bsonType": "object",
@@ -159,9 +152,6 @@ async def init_schema_validation():
         except Exception as create_exc:
             print("Error creating 'tasks' collection:", create_exc)
 
-    # -----------------------------------------------
-    # Коллекция "teams"
-    # -----------------------------------------------
     team_schema = {
         "$jsonSchema": {
             "bsonType": "object",
@@ -215,9 +205,6 @@ async def init_schema_validation():
         except Exception as create_exc:
             print("Error creating 'teams' collection:", create_exc)
 
-    # -----------------------------------------------
-    # Коллекция "users"
-    # -----------------------------------------------
     user_schema = {
         "$jsonSchema": {
             "bsonType": "object",
