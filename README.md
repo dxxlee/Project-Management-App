@@ -66,6 +66,3 @@ The application follows a structured NoSQL schema using **MongoDB**, with collec
 ## Future Improvements
 - Full frontend implementation with **React**.
 - Adding more functionalities
-
-
-
